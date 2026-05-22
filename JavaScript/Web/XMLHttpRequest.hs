@@ -58,7 +58,7 @@ data Method = GET | POST | PUT | DELETE | Method JSString
 
 data XHRError = XHRError String
               | XHRAborted
-              deriving (Generic, Data, Typeable, Show, Eq) 
+              deriving (Generic, Data, Typeable, Show, Eq)
 
 instance Exception XHRError
 
@@ -137,11 +137,11 @@ xhr req = js_createXHR >>= \x ->
         js_setResponseType
           (getResponseTypeString (Proxy :: Proxy a)) x
         forM_ (reqHeaders req) (\(n,v) -> js_setRequestHeader n v x)
-        
+
         case reqWithCredentials req of
           True  -> js_setWithCredentials x
           False -> return ()
-        
+
         r <- case reqData req of
           NoData                            ->
             js_send0 x
