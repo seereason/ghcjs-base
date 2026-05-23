@@ -206,7 +206,7 @@ foreign import javascript unsafe
   js_setWithCredentials :: XHR -> IO ()
 
 foreign import javascript unsafe
-  "(() => { return new XMLHttpRequest(); })"
+  "(() => { return (new XMLHttpRequest()); })"
   js_createXHR :: IO XHR
 foreign import javascript unsafe
   "((x,y) => { y.responseType = x; })"
