@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE JavaScriptFFI #-}
 {-# LANGUAGE UnliftedFFITypes #-}
@@ -22,6 +23,10 @@ import GHC.Num.Integer
 import GHC.Num.Natural
 import Unsafe.Coerce
 import GHC.JS.Prim
+#if defined(wasm32_HOST_ARCH)
+import Numeric (showHex)
+import Data.JSString.Internal.Type (JSString(..))
+#endif
 
 decimal :: Integral a => a -> JSString
 decimal i = decimal' i
@@ -218,15 +223,58 @@ hexErrMsg = "Data.JSString.Int.hexadecimal: applied to negative number"
 
 -- ----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return '' + x; })($1)"
+  js_decI_wasm :: Int -> JSString
+js_decI :: Int#     -> JSString
+js_decI a1 = js_decI_wasm (I# a1)
+{-# INLINE js_decI #-}
+#else
 foreign import javascript unsafe
   "((x) => { return '' + x; })"
   js_decI       :: Int#     -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+-- Int64 / Word64 are BigInts in the wasm JSFFI
+foreign import javascript unsafe "$1.toString()"
+  js_decI64_wasm :: Int64 -> JSString
+js_decI64 :: Int64# -> JSString
+js_decI64 a1 = js_decI64_wasm (I64# a1)
+{-# INLINE js_decI64 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringDecI64"
   js_decI64     :: Int64#   -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return '' + x; })($1)"
+  js_decW_wasm :: Word -> JSString
+js_decW :: Word#    -> JSString
+js_decW a1 = js_decW_wasm (W# a1)
+{-# INLINE js_decW #-}
+#else
 foreign import javascript unsafe
   "((x) => { return '' + x; })"
   js_decW       :: Word#    -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "'' + $1"
+  js_decW32_wasm :: Word32 -> JSString
+js_decW32 :: Word32# -> JSString
+js_decW32 a1 = js_decW32_wasm (W32# a1)
+{-# INLINE js_decW32 #-}
+foreign import javascript unsafe "$1.toString()"
+  js_decW64_wasm :: Word64 -> JSString
+js_decW64 :: Word64# -> JSString
+js_decW64 a1 = js_decW64_wasm (W64# a1)
+{-# INLINE js_decW64 #-}
+-- The BigNat# payload cannot be passed to JavaScript on wasm, so the
+-- digits are produced in Haskell.  The Bool is the sign (True: positive).
+js_decBigNat :: Bool -> ByteArray# -> JSString
+js_decBigNat positive x =
+  let ds = show (NB x)
+  in  pack (if positive then ds else '-' : ds)
+#else
 foreign import javascript unsafe
   "((x) => { return '' + x; })"
   js_decW32     :: Word32#  -> JSString
@@ -236,18 +284,62 @@ foreign import javascript unsafe
 foreign import javascript unsafe
   "h$jsstringDecBigNat"
   js_decBigNat :: Bool -> ByteArray# -> JSString
+#endif
 
 -- these are expected to be only applied to nonnegative integers
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.toString(16); })($1)"
+  js_hexI_wasm :: Int -> JSString
+js_hexI :: Int#    -> JSString
+js_hexI a1 = js_hexI_wasm (I# a1)
+{-# INLINE js_hexI #-}
+#else
 foreign import javascript unsafe
   "((x) => { return x.toString(16); })"
   js_hexI       :: Int#    -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+-- BigInt toString(16) gives '-' followed by the magnitude for negative
+-- numbers, like h$jsstringHexI64
+foreign import javascript unsafe "$1.toString(16)"
+  js_hexI64_wasm :: Int64 -> JSString
+js_hexI64 :: Int64# -> JSString
+js_hexI64 a1 = js_hexI64_wasm (I64# a1)
+{-# INLINE js_hexI64 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringHexI64"
   js_hexI64     :: Int64#   -> JSString
+#endif
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.toString(16); })($1)"
+  js_hexW_wasm :: Word -> JSString
+js_hexW :: Word#    -> JSString
+js_hexW a1 = js_hexW_wasm (W# a1)
+{-# INLINE js_hexW #-}
+#else
 foreign import javascript unsafe
   "((x) => { return x.toString(16); })"
   js_hexW       :: Word#    -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$1.toString(16)"
+  js_hexW32_wasm :: Word32 -> JSString
+js_hexW32 :: Word32# -> JSString
+js_hexW32 a1 = js_hexW32_wasm (W32# a1)
+{-# INLINE js_hexW32 #-}
+foreign import javascript unsafe "$1.toString(16)"
+  js_hexW64_wasm :: Word64 -> JSString
+js_hexW64 :: Word64# -> JSString
+js_hexW64 a1 = js_hexW64_wasm (W64# a1)
+{-# INLINE js_hexW64 #-}
+-- see js_decBigNat
+js_hexBigNat :: Bool -> ByteArray# -> JSString
+js_hexBigNat positive x =
+  let ds = showHex (NB x) ""
+  in  pack (if positive then ds else '-' : ds)
+#else
 foreign import javascript unsafe
   "((x) => { return x.toString(16); })"
   js_hexW32     :: Word32#  -> JSString
@@ -257,18 +349,46 @@ foreign import javascript unsafe
 foreign import javascript unsafe
   "h$jsstringHexBigNat"
   js_hexBigNat :: Bool -> ByteArray# -> JSString
+#endif
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return '-'+x+(-y); })($1,$2)"
+  js_minusDigit_wasm :: JSString -> Int -> JSString
+js_minusDigit :: JSString -> Int# -> JSString
+js_minusDigit a1 a2 = js_minusDigit_wasm a1 (I# a2)
+{-# INLINE js_minusDigit #-}
+#else
 foreign import javascript unsafe
   "((x,y) => { return '-'+x+(-y); })"
   js_minusDigit :: JSString -> Int# -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return '-'+x; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return '-'+x; })"
+#endif
   js_minus :: JSString -> JSString
 
 --
+#if defined(wasm32_HOST_ARCH)
+-- n in [0, 1000000000)
+foreign import javascript unsafe "('' + $1).padStart(9, '0')"
+  js_decIPadded9_wasm :: Int -> JSString
+js_decIPadded9 :: Int# -> JSString
+js_decIPadded9 a1 = js_decIPadded9_wasm (I# a1)
+{-# INLINE js_decIPadded9 #-}
+-- n in [0, 2147483648)
+foreign import javascript unsafe "$1.toString(16).padStart(8, '0')"
+  js_hexIPadded8_wasm :: Int -> JSString
+js_hexIPadded8 :: Int# -> JSString
+js_hexIPadded8 a1 = js_hexIPadded8_wasm (I# a1)
+{-# INLINE js_hexIPadded8 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringDecIPadded9"
   js_decIPadded9 :: Int# -> JSString
 foreign import javascript unsafe
   "h$jsstringHexIPadded8"
   js_hexIPadded8 :: Int# -> JSString
+#endif

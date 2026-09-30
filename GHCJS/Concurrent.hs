@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI,
              UnliftedFFITypes, DeriveDataTypeable, MagicHash
   #-}
@@ -48,6 +49,12 @@ import           Data.Data
 import           Data.Typeable
 
 import           Unsafe.Coerce
+#if defined(wasm32_HOST_ARCH)
+import           Data.Bits (setBit, clearBit, (.|.), (.&.))
+import           Data.IORef
+import qualified Data.Map.Strict as M
+import           System.IO.Unsafe (unsafePerformIO)
+#endif
 
 {- |
      Run the action without the scheduler preempting the thread. When a blocking
@@ -107,6 +114,45 @@ syncThreadState (ThreadId tid) = js_syncThreadState tid
 
 -- ----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+{- The wasm RTS has no synchronous threads (h$runSync) and no
+   noPreemption / isSynchronous thread flags.  To keep the API, the flags
+   set by 'withoutPreemption' and 'synchronously' are recorded per thread
+   here and reported by 'syncThreadState', but the scheduler does not act
+   on them (in particular 'synchronously' does not make blocking
+   operations throw 'WouldBlockException').
+
+   Flag bits as returned by h$syncThreadState:
+     bit 0: synchronous, bit 1: continue async, bit 2: non-preemptible
+ -}
+threadFlags :: IORef (M.Map ThreadId Int)
+threadFlags = unsafePerformIO (newIORef M.empty)
+{-# NOINLINE threadFlags #-}
+
+-- set or clear a flag bit for the current thread, returning the old value
+setThreadFlag :: Int -> Bool -> IO Bool
+setThreadFlag bit x = do
+  t <- myThreadId
+  atomicModifyIORef' threadFlags $ \m ->
+    let old  = M.findWithDefault 0 t m
+        new  = if x then setBit old bit else clearBit old bit
+        m'   = if new == 0 then M.delete t m else M.insert t new m
+    in  (m', testBit old bit)
+
+js_syncThreadState :: ThreadId# -> IO Int
+js_syncThreadState tid = do
+  m <- readIORef threadFlags
+  let f = M.findWithDefault 0 (ThreadId tid) m
+  return $ if testBit f 0
+             then 1 .|. 4           -- synchronous: not continue-async, non-preemptible
+             else 2 .|. (f .&. 4)   -- asynchronous: continue-async
+
+js_setNoPreemption :: Bool -> IO Bool
+js_setNoPreemption = setThreadFlag 2
+
+js_setSynchronous :: Bool -> IO Bool
+js_setSynchronous = setThreadFlag 0
+#else
 foreign import javascript unsafe "h$syncThreadState"
   js_syncThreadState :: ThreadId# -> IO Int
 
@@ -117,3 +163,4 @@ foreign import javascript unsafe
 foreign import javascript unsafe
   "((x) => { var r = h$currentThread.isSynchronous; h$currentThread.isSynchronous = x; return r; })"
   js_setSynchronous :: Bool -> IO Bool
+#endif

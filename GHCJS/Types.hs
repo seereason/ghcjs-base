@@ -13,15 +13,26 @@ module GHCJS.Types ( JSVal
                    , isNull
                    , isUndefined
                    , nullRef
+#if defined(wasm32_HOST_ARCH)
+                     -- wasm JSFFI imports can only marshal a newtype whose
+                     -- constructor is in scope.
+                   , JSString(..)
+#else
                    , JSString
+#endif
+#if !defined(wasm32_HOST_ARCH)
+                     -- The JavaScript backend's representation of JSVal
+                     -- (a ByteArray#) and of Ptr (an object plus an
+                     -- offset) have no wasm counterpart.
                    , mkRef
                    , Ref#
                    , toPtr
                    , fromPtr
+#endif
                    , JSRef
                    ) where
 
-import Data.JSString.Internal.Type (JSString)
+import Data.JSString.Internal.Type (JSString(..))
 import GHCJS.Internal.Types
 
 import GHC.JS.Prim
@@ -33,14 +44,18 @@ import GHC.Ptr
 
 import Control.DeepSeq
 
+nullRef :: JSVal
+nullRef = js_nullRef
+{-# INLINE nullRef #-}
+
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "null"
+  js_nullRef :: JSVal
+#else
 type Ref# = ByteArray#
 
 mkRef :: ByteArray# -> JSVal
 mkRef x = JSVal x
-
-nullRef :: JSVal
-nullRef = js_nullRef
-{-# INLINE nullRef #-}
 
 toPtr :: JSVal -> Ptr a
 toPtr j = js_mkPtr j
@@ -58,6 +73,7 @@ foreign import javascript unsafe "((x,y) => { return x; })"
 
 foreign import javascript unsafe "((x) => { h$ret1 = 0; return x; })"
   js_mkPtr :: JSVal -> Ptr a
+#endif
 
 -- | This is a deprecated copmatibility wrapper for the old JSRef type.
 --

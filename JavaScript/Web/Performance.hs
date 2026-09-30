@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI #-}
 
 {- | The Performance interface represents timing-related performance information for the given page.
@@ -27,5 +28,9 @@ now = js_performanceNow
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(() => { return performance.now(); })()"
+#else
 foreign import javascript unsafe "(() => { return performance.now(); })"
+#endif
   js_performanceNow :: IO Double

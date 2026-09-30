@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI #-}
 
 module JavaScript.Web.Storage ( localStorage
@@ -56,19 +57,53 @@ clear s = js_clear s
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "window.localStorage"                 js_localStorage   :: Storage
+#else
 foreign import javascript unsafe
   "window.localStorage"                 js_localStorage   :: Storage
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "window.sessionStorage"               js_sessionStorage :: Storage
+#else
 foreign import javascript unsafe
   "window.sessionStorage"               js_sessionStorage :: Storage
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.length; })($1)"       js_getLength      :: Storage -> IO Int
+#else
 foreign import javascript unsafe
   "((x) => { return x.length; })"       js_getLength      :: Storage -> IO Int
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.key(x); })($1,$2)"     js_getIndex       :: Int -> Storage -> IO JSVal
+#else
 foreign import javascript unsafe
   "((x,y) => { return y.key(x); })"     js_getIndex       :: Int -> Storage -> IO JSVal
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.getItem(x); })($1,$2)" js_getItem        :: JSString -> Storage -> IO JSVal
+#else
 foreign import javascript unsafe
   "((x,y) => { return y.getItem(x); })" js_getItem        :: JSString -> Storage -> IO JSVal
+#endif
+#if defined(wasm32_HOST_ARCH)
+-- NB: the JavaScript-backend snippet calls setItem on the key (x), which
+-- always throws a TypeError; the wasm version calls it on the Storage.
+foreign import javascript unsafe "$3.setItem($1,$2);"    js_setItem       :: JSString -> JSString -> Storage -> IO ()
+#else
 foreign import javascript safe
   "((x,y,z) => { x.setItem(x,y); })"    js_setItem        :: JSString -> JSString -> Storage -> IO ()
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.removeItem(x); })($1,$2)"     js_removeItem     :: JSString -> Storage -> IO ()
+#else
 foreign import javascript unsafe
   "((x,y) => { y.removeItem(x); })"     js_removeItem     :: JSString -> Storage -> IO ()
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.clear(); })($1)"             js_clear          :: Storage -> IO ()
+#else
 foreign import javascript unsafe
   "((x) => { x.clear(); })"             js_clear          :: Storage -> IO ()
+#endif

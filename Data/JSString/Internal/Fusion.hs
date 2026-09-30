@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns, MagicHash, ForeignFunctionInterface, JavaScriptFFI,
              UnliftedFFITypes
   #-}
@@ -178,17 +179,58 @@ mapAccumL f z0 (Stream next s0) = runJSString $ \done ->
 -------------------------------------------------------------------------------
 
 -- returns -1 for end of stream
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var ch = $2.codePointAt($1); if(ch === undefined) return -1; return ch;"
+  js_index_wasm :: Int -> JSString -> Int
+js_index :: Int -> JSString -> Int#
+js_index i x = case js_index_wasm i x of I# r -> r
+{-# INLINE js_index #-}
+foreign import javascript unsafe
+  "var i = $1, s = $2; if(i < 0 || i > s.length) return -1; var ch = s.charCodeAt(i); return ((ch|1023)===0xDFFF) ? (((s.charCodeAt(i-1)-0xD800)<<10)+ch-0xDC00+0x10000) : ch;"
+  js_indexR_wasm :: Int -> JSString -> Int
+js_indexR :: Int -> JSString -> Int#
+js_indexR i x = case js_indexR_wasm i x of I# r -> r
+{-# INLINE js_indexR #-}
+#else
 foreign import javascript unsafe
   "h$jsstringIndex" js_index :: Int -> JSString -> Int#
 foreign import javascript unsafe
   "h$jsstringIndexR" js_indexR :: Int -> JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.length; })($1)"
+  js_length_wasm :: JSString -> Int
+js_length :: JSString -> Int#
+js_length a1 = case js_length_wasm a1 of I# r -> r
+{-# INLINE js_length #-}
+#else
 foreign import javascript unsafe
   "((x) => { return x.length; })" js_length :: JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return [x]; })($1)" js_newSingletonArray :: Char -> IO JSVal
+#else
 foreign import javascript unsafe
   "((x) => { return [x]; })" js_newSingletonArray :: Char -> IO JSVal
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z[y] = x; })($1,$2,$3)" js_writeArray :: Char -> Int -> JSVal -> IO ()
+#else
 foreign import javascript unsafe
   "((x,y,z) => { z[y] = x; })" js_writeArray :: Char -> Int -> JSVal -> IO ()
+#endif
+#if defined(wasm32_HOST_ARCH)
+-- h$jsstringConvertArray inlined: the array holds code points
+foreign import javascript unsafe
+  "var a = $1; var r = ''; for(var k=0; k<a.length; k+=60000) r += String.fromCodePoint.apply(null, a.slice(k, k+60000)); return r;"
+  js_packString :: JSVal -> IO JSString
+foreign import javascript unsafe
+  "var a = $1.reverse(); var r = ''; for(var k=0; k<a.length; k+=60000) r += String.fromCodePoint.apply(null, a.slice(k, k+60000)); return r;"
+  js_packReverse :: JSVal -> IO JSString
+#else
 foreign import javascript unsafe
   "h$jsstringPackArray" js_packString :: JSVal -> IO JSString
 foreign import javascript unsafe
   "h$jsstringPackArrayReverse" js_packReverse :: JSVal -> IO JSString
+#endif

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes, OverloadedStrings, DeriveDataTypeable,
              ForeignFunctionInterface, JavaScriptFFI, EmptyDataDecls,
              TypeFamilies, DataKinds, ScopedTypeVariables,
@@ -201,58 +202,136 @@ xhrByteString = fmap
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.withCredentials = true; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { x.withCredentials = true; })"
+#endif
   js_setWithCredentials :: XHR -> IO ()
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(() => { return (new XMLHttpRequest()); })()"
+#else
 foreign import javascript unsafe
   "(() => { return (new XMLHttpRequest()); })"
+#endif
   js_createXHR :: IO XHR
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.responseType = x; })($1,$2)"
+#else
 foreign import javascript unsafe
   "((x,y) => { y.responseType = x; })"
+#endif
   js_setResponseType :: JSString -> XHR -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.abort(); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x.abort(); })"
+#endif
   js_abort :: XHR -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.setRequestHeader(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe
   "((x,y,z) => { z.setRequestHeader(x,y); })"
+#endif
   js_setRequestHeader :: JSString -> JSString -> XHR -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.open(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe
   "((x,y,z) => { z.open(x,y); })"
+#endif
   js_open2 :: JSString -> JSString -> XHR -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.open($1,$2,true,$3,$4); })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe
   "(($1,$2,$3,$4,$5) => { $5.open($1,$2,true,$3,$4); })"
+#endif
   js_open4 :: JSString -> JSString -> JSString -> JSString -> XHR -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(() => { return (new FormData()) })()"
+#else
 foreign import javascript unsafe
   "(() => { return (new FormData()) })"
+#endif
   js_createFormData :: IO JSFormData
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.append(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe
   "((x,y,z) => { z.append(x,y); })"
+#endif
   js_appendFormData2 :: JSString -> JSVal -> JSFormData -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4) => { $4.append($1,$2,$3); })($1,$2,$3,$4)"
+#else
 foreign import javascript unsafe
   "(($1,$2,$3,$4) => { $4.append($1,$2,$3); })"
+#endif
   js_appendFormData3 :: JSString -> JSVal -> JSString -> JSFormData -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.status; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x.status; })"
+#endif
   js_getStatus :: XHR -> IO Int
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.response; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x.response; })"
+#endif
   js_getResponse :: XHR -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.response ? true : false; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x.response ? true : false; })"
+#endif
   js_hasResponse :: XHR -> IO Bool
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.getAllResponseHeaders(); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x.getAllResponseHeaders(); })"
+#endif
   js_getAllResponseHeaders :: XHR -> IO JSString
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.getResponseHeader(x); })($1,$2)"
+#else
 foreign import javascript unsafe
   "((x,y) => { return y.getResponseHeader(x); })"
+#endif
   js_getResponseHeader :: JSString -> XHR -> IO JSVal
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+-- h$sendXHR as asynchronous imports: the Promise resolves with
+-- 0 (load), 1 (abort) or 2 (error)
+foreign import javascript safe
+  "var xhr = $1; return new Promise((resolve) => { xhr.addEventListener('error', () => { resolve(2); }); xhr.addEventListener('abort', () => { resolve(1); }); xhr.addEventListener('load', () => { resolve(0); }); xhr.send(); });"
+  js_send0_wasm :: XHR -> IO Int
+foreign import javascript safe
+  "var d = $1; var xhr = $2; return new Promise((resolve) => { xhr.addEventListener('error', () => { resolve(2); }); xhr.addEventListener('abort', () => { resolve(1); }); xhr.addEventListener('load', () => { resolve(0); }); if(d) { xhr.send(d); } else { xhr.send(); } });"
+  js_send1_wasm :: JSVal -> XHR -> IO Int
+
+-- wait for the request to finish before returning, like the JavaScript
+-- backend's interruptible imports
+js_send0 :: XHR -> IO Int
+js_send0 x = js_send0_wasm x >>= evaluate
+js_send1 :: JSVal -> XHR -> IO Int
+js_send1 d x = js_send1_wasm d x >>= evaluate
+#else
 foreign import javascript interruptible
   "((x,c) => { return h$sendXHR(x, null, c); })"
   js_send0 :: XHR -> IO Int
 foreign import javascript interruptible
   "((x,y,c) => { return h$sendXHR(y, x, c); })"
   js_send1 :: JSVal -> XHR -> IO Int
+#endif

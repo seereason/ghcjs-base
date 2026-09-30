@@ -105,6 +105,9 @@ import qualified Data.Text.Internal as T
 import qualified Data.Text.Lazy as TL (Text, toStrict, fromStrict)
 
 import           Unsafe.Coerce
+#if defined(wasm32_HOST_ARCH)
+import           Data.JSString.Internal.Type (JSString(..))
+#endif
 
 -- types returned by JS typeof operator
 data JSType = Undefined
@@ -136,6 +139,24 @@ toJSBool True = jsTrue
 toJSBool _    = jsFalse
 {-# INLINE toJSBool #-}
 
+#if defined(wasm32_HOST_ARCH)
+-- no ByteArray# based JSVal (mkRef) on wasm: shared constants instead
+jsTrue :: JSVal
+jsTrue = js_true
+{-# NOINLINE jsTrue #-}
+
+jsFalse :: JSVal
+jsFalse = js_false
+{-# NOINLINE jsFalse #-}
+
+jsNull :: JSVal
+jsNull = js_null
+{-# NOINLINE jsNull #-}
+
+jsUndefined :: JSVal
+jsUndefined = js_undefined
+{-# NOINLINE jsUndefined #-}
+#else
 jsTrue :: JSVal
 jsTrue = mkRef (js_true 0#)
 {-# INLINE jsTrue #-}
@@ -151,6 +172,7 @@ jsNull = mkRef (js_null 0#)
 jsUndefined :: JSVal
 jsUndefined = mkRef (js_undefined 0#)
 {-# INLINE jsUndefined #-}
+#endif
 
 -- check whether a reference is `truthy' in the JavaScript sense
 isTruthy :: JSVal -> Bool
@@ -367,16 +389,31 @@ unsafeMutableByteArrayByteString arr =
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x===true; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x===true; })"
+#endif
   js_fromBool :: JSVal -> Bool
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x ? true : false; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x ? true : false; })"
+#endif
   js_isTruthy :: JSVal -> Bool
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "true"      js_true      :: JSVal
+foreign import javascript unsafe "false"     js_false     :: JSVal
+foreign import javascript unsafe "null"      js_null      :: JSVal
+foreign import javascript unsafe "undefined" js_undefined :: JSVal
+#else
 foreign import javascript unsafe "((x) => { return true; })"  js_true :: Int# -> Ref#
 foreign import javascript unsafe "((x) => { return false; })" js_false :: Int# -> Ref#
 foreign import javascript unsafe "((x) => { return null; })"  js_null :: Int# -> Ref#
 foreign import javascript unsafe "((x) => { return undefined; })"  js_undefined :: Int# -> Ref#
+#endif
 -- foreign import javascript unsafe "$r = [];" js_emptyArray :: IO (JSArray a)
 -- foreign import javascript unsafe "$r = {};" js_emptyObj :: IO (JSVal a)
 --foreign import javascript unsafe "$3[$1] = $2;"
@@ -390,27 +427,63 @@ foreign import javascript unsafe "((x) => { return undefined; })"  js_undefined 
 --  js_index :: Int -> JSArray a -> IO (JSVal a)
 --foreign import javascript unsafe "$2[$1]"
 --  js_unsafeIndex :: Int -> JSArray a -> IO (JSVal a)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y[x]; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { return y[x]; })"
+#endif
   js_unsafeGetProp :: JSString -> JSVal -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { return z[x] = y; })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { return z[x] = y; })"
+#endif
   js_unsafeSetProp :: JSString -> JSVal -> JSVal -> IO ()
 {-
 foreign import javascript safe "h$listProps($1)"
   js_listProps :: JSVal a -> IO (JSArray JSString)
 -}
+#if defined(wasm32_HOST_ARCH)
+-- h$jsTypeOf (jsbits/utils.js)
+foreign import javascript unsafe
+  "var t = typeof($1); if(t === 'undefined') return 0; if(t === 'object') return 1; if(t === 'boolean') return 2; if(t === 'number') return 3; if(t === 'string') return 4; if(t === 'symbol') return 5; if(t === 'function') return 6; return 7;"
+  js_jsTypeOf_wasm :: JSVal -> Int
+js_jsTypeOf :: JSVal -> Int#
+js_jsTypeOf a1 = case js_jsTypeOf_wasm a1 of I# r -> r
+{-# INLINE js_jsTypeOf #-}
+-- h$jsonTypeOf (jsbits/utils.js) with h$isInteger (rts/js/object.js)
+-- 0 - null, 1 - integer, 2 - float, 3 - bool, 4 - string, 5 - array, 6 - object
+foreign import javascript unsafe
+  "var o = $1; if (!(o instanceof Object)) { if (o == null) { return 0; } else if (typeof o == 'number') { if (o === +o && o === (o|0)) { return 1; } else { return 2; } } else if (typeof o == 'boolean') { return 3; } else { return 4; } } else { if (Object.prototype.toString.call(o) == '[object Array]') { return 5; } else if (!o) { return 0; } else { return 6; } }"
+  js_jsonTypeOf_wasm :: JSVal -> Int
+js_jsonTypeOf :: JSVal -> Int#
+js_jsonTypeOf a1 = case js_jsonTypeOf_wasm a1 of I# r -> r
+{-# INLINE js_jsonTypeOf #-}
+#else
 foreign import javascript unsafe "h$jsTypeOf"
   js_jsTypeOf :: JSVal -> Int#
 foreign import javascript unsafe "h$jsonTypeOf"
   js_jsonTypeOf :: JSVal -> Int#
+#endif
 -- foreign import javascript unsafe "h$listToArray"
 --  js_toArray :: Any -> IO (JSArray a)
 -- foreign import javascript unsafe "$1 === null"
 --  js_isNull      :: JSVal a -> Bool
 
 -- foreign import javascript unsafe "h$isUndefined" js_isUndefined :: JSVal a -> Bool
+#if defined(wasm32_HOST_ARCH)
+-- returns true for null, but not for functions and host objects
+foreign import javascript unsafe "typeof($1) === 'object'"   js_isObject    :: JSVal -> Bool
+foreign import javascript unsafe "typeof($1) === 'boolean'"  js_isBoolean   :: JSVal -> Bool
+foreign import javascript unsafe "typeof($1) === 'number'"   js_isNumber    :: JSVal -> Bool
+foreign import javascript unsafe "typeof($1) === 'string'"   js_isString    :: JSVal -> Bool
+foreign import javascript unsafe "typeof($1) === 'symbol'"   js_isSymbol    :: JSVal -> Bool
+foreign import javascript unsafe "typeof($1) === 'function'" js_isFunction  :: JSVal -> Bool
+#else
 foreign import javascript unsafe "h$isObject"    js_isObject    :: JSVal -> Bool
 foreign import javascript unsafe "h$isBoolean"   js_isBoolean   :: JSVal -> Bool
 foreign import javascript unsafe "h$isNumber"    js_isNumber    :: JSVal -> Bool
 foreign import javascript unsafe "h$isString"    js_isString    :: JSVal -> Bool
 foreign import javascript unsafe "h$isSymbol"    js_isSymbol    :: JSVal -> Bool
 foreign import javascript unsafe "h$isFunction"  js_isFunction  :: JSVal -> Bool
+#endif

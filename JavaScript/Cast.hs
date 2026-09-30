@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables, ForeignFunctionInterface, JavaScriptFFI #-}
 
 module JavaScript.Cast ( Cast(..)
@@ -22,5 +23,9 @@ class Cast a where
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return x instanceof y; })($1,$2)" js_checkCast :: JSVal -> JSVal -> Bool
+#else
 foreign import javascript unsafe 
   "((x,y) => { return x instanceof y; })" js_checkCast :: JSVal -> JSVal -> Bool
+#endif

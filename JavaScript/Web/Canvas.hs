@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls, ForeignFunctionInterface, JavaScriptFFI,
              OverloadedStrings, DeriveDataTypeable
   #-}
@@ -82,6 +83,12 @@ import           JavaScript.Object (Object)
 import qualified JavaScript.Object as O
 import           JavaScript.Array  (JSArray)
 import qualified JavaScript.Array  as A
+#if defined(wasm32_HOST_ARCH)
+-- the wasm JSFFI only unwraps newtypes whose constructors are in scope
+import           Data.JSString.Internal.Type (JSString(..))
+import           JavaScript.Object.Internal (Object(..))
+import           JavaScript.Array.Internal (SomeJSArray(..))
+#endif
 
 data TextAlign = Start
                | End
@@ -332,101 +339,289 @@ height c = js_height c
 
 -- ----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { var r = document.createElement('canvas'); r.width = x; r.height = y; return r; })($1,$2)"
+#else
 foreign import javascript unsafe
   "((x,y) => { var r = document.createElement('canvas'); r.width = x; r.height = y; return r; })"
+#endif
   js_create :: Int -> Int -> IO Canvas
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.getContext('2d'); })($1)"
+#else
 foreign import javascript unsafe "((x) => { return x.getContext('2d'); })"
+#endif
   js_getContext :: Canvas -> IO Context
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.save(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { x.save(); })"
+#endif
   js_save :: Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.restore(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { x.restore(); })"
+#endif
   js_restore  :: Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.transform($1,$2,$3,$4,$5,$6); })($1,$2,$3,$4,$5,$6,$7)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.transform($1,$2,$3,$4,$5,$6); })"
+#endif
   js_transform :: Double -> Double -> Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.setTransform($1,$2,$3,$4,$5,$6); })($1,$2,$3,$4,$5,$6,$7)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.setTransform($1,$2,$3,$4,$5,$6); })"
+#endif
   js_setTransform :: Double -> Double -> Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.scale(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { z.scale(x,y); })"
+#endif
   js_scale :: Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.translate(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { z.translate(x,y); })"
+#endif
   js_translate  :: Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.rotate(x); })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.rotate(x); })"
+#endif
   js_rotate :: Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.fill(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { x.fill(); })"
+#endif
   js_fill :: Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.fill(x); })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.fill(x); })"
+#endif
   js_fill_rule  :: JSString -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.stroke(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { x.stroke(); })"
+#endif
   js_stroke :: Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.beginPath(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { x.beginPath(); })"
+#endif
   js_beginPath :: Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.closePath(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { x.closePath(); })"
+#endif
   js_closePath :: Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { x.clip(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { x.clip(); })"
+#endif
   js_clip  :: Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.moveTo(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { z.moveTo(x,y); })"
+#endif
   js_moveTo :: Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.lineTo(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { z.lineTo(x,y); })"
+#endif
   js_lineTo :: Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.quadraticCurveTo($1,$2,$3,$4); })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.quadraticCurveTo($1,$2,$3,$4); })"
+#endif
   js_quadraticCurveTo :: Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.bezierCurveTo($1,$2,$3,$4,$5,$6); })($1,$2,$3,$4,$5,$6,$7)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.bezierCurveTo($1,$2,$3,$4,$5,$6); })"
+#endif
   js_bezierCurveTo :: Double -> Double -> Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.arc($1,$2,$3,$4,$5,$6); })($1,$2,$3,$4,$5,$6,$7)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { $7.arc($1,$2,$3,$4,$5,$6); })"
+#endif
   js_arc :: Double -> Double -> Double -> Double -> Double -> Bool -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6) => { $6.arcTo($1,$2,$3,$4,$5); })($1,$2,$3,$4,$5,$6)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6) => { $6.arcTo($1,$2,$3,$4,$5); })"
+#endif
   js_arcTo :: Double -> Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.rect($1,$2,$3,$4); })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.rect($1,$2,$3,$4); })"
+#endif
   js_rect :: Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { z.isPointInPath(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { z.isPointInPath(x,y); })"
+#endif
   js_isPointInPath :: Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.fillStyle = 'rgba(' + $1 + ',' + $2 + ',' + $3 + ',' + $4 + ')'; })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe
   "(($1,$2,$3,$4,$5) => { $5.fillStyle = 'rgba(' + $1 + ',' + $2 + ',' + $3 + ',' + $4 + ')'; })"
+#endif
   js_fillStyle :: Int -> Int -> Int -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.strokeStyle = 'rgba(' + $1 + ',' + $2 + ',' + $3 + ',' + $4 + ')'; })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe
   "(($1,$2,$3,$4,$5) => { $5.strokeStyle = 'rgba(' + $1 + ',' + $2 + ',' + $3 + ',' + $4 + ')'; })"
+#endif
   js_strokeStyle :: Int -> Int -> Int -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.globalAlpha = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.globalAlpha = x; })"
+#endif
   js_globalAlpha :: Double           -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.lineJoin = x; })($1,$2)"
+#else
 foreign import javascript unsafe
   "((x,y) => { y.lineJoin = x; })"
+#endif
   js_lineJoin :: JSString -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.lineCap = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.lineCap = x; })"
+#endif
   js_lineCap :: JSString -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.miterLimit = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.miterLimit = x; })"
+#endif
   js_miterLimit :: Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.setLineDash(x); })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.setLineDash(x); })"
+#endif
   js_setLineDash :: JSArray -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.lineDashOffset = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.lineDashOffset = x; })"
+#endif
   js_lineDashOffset :: Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.font = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.font = x; })"
+#endif
   js_font :: JSString -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.textAlign = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.textAlign = x; })"
+#endif
   js_textAlign :: JSString -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.textBaseline = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.textBaseline = x; })"
+#endif
   js_textBaseline :: JSString -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { y.lineWidth = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { y.lineWidth = x; })"
+#endif
   js_lineWidth :: Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4) => { $4.fillText($1,$2,$3); })($1,$2,$3,$4)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4) => { $4.fillText($1,$2,$3); })"
+#endif
   js_fillText :: JSString -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4) => { $4.strokeText($1,$2,$3); })($1,$2,$3,$4)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4) => { $4.strokeText($1,$2,$3); })"
+#endif
   js_strokeText :: JSString -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.measureText(x); })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { return y.measureText(x); })"
+#endif
   js_measureText :: JSString                    -> Context -> IO Object
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.fillRect($1,$2,$3,$4); })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.fillRect($1,$2,$3,$4); })"
+#endif
   js_fillRect :: Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.clearRect($1,$2,$3,$4); })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.clearRect($1,$2,$3,$4); })"
+#endif
   js_clearRect :: Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.strokeRect($1,$2,$3,$4); })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { $5.strokeRect($1,$2,$3,$4); })"
+#endif
   js_strokeRect :: Double -> Double -> Double -> Double -> Context -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6) => { $6.drawImage($1,$2,$3,$4,$5); })($1,$2,$3,$4,$5,$6)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6) => { $6.drawImage($1,$2,$3,$4,$5); })"
+#endif
   js_drawImage :: Image -> Int -> Int -> Int -> Int -> Context -> IO () 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { return z.createPattern(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { return z.createPattern(x,y); })"
+#endif
   js_createPattern :: Image -> JSString -> Context -> IO Pattern
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.width; })($1)"
+#else
 foreign import javascript unsafe "((x) => { return x.width; })"
+#endif
   js_width :: Canvas -> IO Int
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.height; })($1)"
+#else
 foreign import javascript unsafe "((x) => { return x.height; })"
+#endif
   js_height :: Canvas -> IO Int
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.width = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { return y.width = x; })"
+#endif
   js_setWidth :: Int -> Canvas -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.height = x; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { return y.height = x; })"
+#endif
   js_setHeight :: Int -> Canvas -> IO ()

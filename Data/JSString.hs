@@ -169,6 +169,9 @@ import           Unsafe.Coerce
 
 import           GHC.JS.Prim                           (JSVal)
 import qualified GHC.JS.Prim                           as Prim
+#if defined(wasm32_HOST_ARCH)
+import           System.IO.Unsafe                     (unsafePerformIO)
+#endif
 
 import           Data.JSString.Internal.Type
 import           Data.JSString.Internal.Fusion        (stream, unstream)
@@ -1814,152 +1817,702 @@ charWidth cp | isTrue# (cp >=# 0x10000#) = 2#
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var a = $1; var r = ''; for(var k=0; k<a.length; k+=60000) r += String.fromCodePoint.apply(null, a.slice(k, k+60000)); return r;"
+  js_pack_wasm :: JSVal -> JSString
+js_pack :: Exts.Any -> JSString
+js_pack xs = js_pack_wasm (wCharsToArr (unsafeCoerce xs))
+{-# INLINE js_pack #-}
+#else
 foreign import javascript unsafe
   "h$jsstringPack" js_pack :: Exts.Any -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x === ''; })($1)" js_null :: JSString -> Bool
+#else
 foreign import javascript unsafe
   "((x) => { return x === ''; })" js_null :: JSString -> Bool
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x === null; })($1)" js_isNull :: JSVal -> Bool
+#else
 foreign import javascript unsafe
   "((x) => { return x === null; })" js_isNull :: JSVal -> Bool
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return x === y; })($1,$2)" js_eq :: JSString -> JSString -> Bool
+#else
 foreign import javascript unsafe
   "((x,y) => { return x === y; })" js_eq :: JSString -> JSString -> Bool
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "$1 + $2"
+  js_append :: JSString -> JSString -> JSString
+#else
 foreign import javascript unsafe
 --  "h$jsstringAppend" js_append :: JSString -> JSString -> JSString -- debug
    "((x,y) => { return x + y; })" js_append :: JSString -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return ($1<$2)?-1:(($1>$2)?1:0);"
+  js_compare_wasm :: JSString -> JSString -> Int
+js_compare :: JSString -> JSString -> Int#
+js_compare x y = case js_compare_wasm x y of I# r -> r
+{-# INLINE js_compare #-}
+#else
 foreign import javascript unsafe
   "h$jsstringCompare" js_compare :: JSString -> JSString -> Int#
+#endif
 --  "($1<$2)?-1:(($1>$2)?1:0)" js_compare :: JSString -> JSString -> Int#
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "String.fromCodePoint($1)"
+  js_singleton :: Char -> JSString
+#else
 foreign import javascript unsafe
   "h$jsstringSingleton" js_singleton :: Char -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var s = $1, r = [], i = s.length-1, c; while(i >= 0) { c = s.charCodeAt(i--); if((c|1023)===0xDFFF) c = (((s.charCodeAt(i--)-0xD800)<<10)+c-0xDC00+0x10000); r.push(c); } return r.reverse();"
+  js_unpack_wasm :: JSString -> JSVal
+js_unpack :: JSString -> Exts.Any -- String
+js_unpack x = unsafeCoerce (wArrToChars (js_unpack_wasm x))
+{-# INLINE js_unpack #-}
+#else
 foreign import javascript unsafe
   "h$jsstringUnpack" js_unpack :: JSString -> Exts.Any -- String
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "String.fromCodePoint($1) + $2"
+  js_cons :: Char -> JSString -> JSString
+#else
 foreign import javascript unsafe
   "h$jsstringCons" js_cons :: Char -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "$1 + String.fromCodePoint($2)"
+  js_snoc :: JSString -> Char -> JSString
+#else
 foreign import javascript unsafe
   "h$jsstringSnoc" js_snoc :: JSString -> Char -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var s = $1; if(s.length===0) return [-1,null]; var ch = s.codePointAt(0); if(ch === undefined) return [-1,null]; return [ch, s.substr((ch>=0x10000)?2:1)];"
+  js_uncons_wasm :: JSString -> JSVal
+js_uncons :: JSString -> (# Int#, JSString #)
+js_uncons x = wIntStr (js_uncons_wasm x)
+{-# INLINE js_uncons #-}
+#else
 foreign import javascript unsafe
   "h$jsstringUncons" js_uncons :: JSString -> (# Int#, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var s = $1, l = s.length; if(l===0) return [-1,null]; var ch = s.charCodeAt(l-1); if((ch|1023)===0xDFFF) { if(l !== 1) { return [(((s.charCodeAt(l-2)-0xD800)<<10)+ch-0xDC00+0x10000), s.substr(0,l-2)]; } else { return [-1,null]; } } else { return [ch, s.substr(0,l-1)]; }"
+  js_unsnoc_wasm :: JSString -> JSVal
+js_unsnoc :: JSString -> (# Int#, JSString #)
+js_unsnoc x = wIntStr (js_unsnoc_wasm x)
+{-# INLINE js_unsnoc #-}
+#else
 foreign import javascript unsafe
   "h$jsstringUnsnoc" js_unsnoc :: JSString -> (# Int#, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { return z.substr(x,y); })($1,$2,$3)"
+  js_substr_wasm :: Int -> Int -> JSString -> JSString
+js_substr :: Int# -> Int# -> JSString -> JSString
+js_substr a1 a2 a3 = js_substr_wasm (I# a1) (I# a2) a3
+{-# INLINE js_substr #-}
+#else
 foreign import javascript unsafe
   "((x,y,z) => { return z.substr(x,y); })" js_substr :: Int# -> Int# -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.substr(x); })($1,$2)"
+  js_substr1_wasm :: Int -> JSString -> JSString
+js_substr1 :: Int# -> JSString -> JSString
+js_substr1 a1 a2 = js_substr1_wasm (I# a1) a2
+{-# INLINE js_substr1 #-}
+#else
 foreign import javascript unsafe
   "((x,y) => { return y.substr(x); })" js_substr1 :: Int# -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { return z.substring(x,y); })($1,$2,$3)"
+  js_substring_wasm :: Int -> Int -> JSString -> JSString
+js_substring :: Int# -> Int# -> JSString -> JSString
+js_substring a1 a2 a3 = js_substring_wasm (I# a1) (I# a2) a3
+{-# INLINE js_substring #-}
+#else
 foreign import javascript unsafe
   "((x,y,z) => { return z.substring(x,y); })" js_substring :: Int# -> Int# -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.length; })($1)"
+  js_length_wasm :: JSString -> Int
+js_length :: JSString -> Int#
+js_length a1 = case js_length_wasm a1 of I# r -> r
+{-# INLINE js_length #-}
+#else
 foreign import javascript unsafe
   "((x) => { return x.length; })" js_length :: JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return ((y.charCodeAt(x)|1023)===0xDBFF)?2:1; })($1,$2)"
+  js_charWidthAt_wasm :: Int -> JSString -> Int
+js_charWidthAt :: Int# -> JSString -> Int#
+js_charWidthAt a1 a2 = case js_charWidthAt_wasm (I# a1) a2 of I# r -> r
+{-# INLINE js_charWidthAt #-}
+#else
 foreign import javascript unsafe
   "((x,y) => { return ((y.charCodeAt(x)|1023)===0xDBFF)?2:1; })" js_charWidthAt
   :: Int# -> JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var ch = $2.codePointAt($1); if(ch === undefined) return -1; return ch;"
+  js_index_wasm :: Int -> JSString -> Int
+js_index :: Int# -> JSString -> Int#
+js_index i x = case js_index_wasm (I# i) x of I# r -> r
+{-# INLINE js_index #-}
+#else
 foreign import javascript unsafe
   "h$jsstringIndex" js_index :: Int# -> JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var i = $1, s = $2; if(i < 0 || i > s.length) return -1; var ch = s.charCodeAt(i); return ((ch|1023)===0xDFFF) ? (((s.charCodeAt(i-1)-0xD800)<<10)+ch-0xDC00+0x10000) : ch;"
+  js_indexR_wasm :: Int -> JSString -> Int
+js_indexR :: Int# -> JSString -> Int#
+js_indexR i x = case js_indexR_wasm (I# i) x of I# r -> r
+{-# INLINE js_indexR #-}
+#else
 foreign import javascript unsafe
   "h$jsstringIndexR" js_indexR :: Int# -> JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return $2.codePointAt($1);"
+  js_uncheckedIndex_wasm :: Int -> JSString -> Int
+js_uncheckedIndex :: Int# -> JSString -> Int#
+js_uncheckedIndex i x = case js_uncheckedIndex_wasm (I# i) x of I# r -> r
+{-# INLINE js_uncheckedIndex #-}
+#else
 foreign import javascript unsafe
   "h$jsstringUncheckedIndex" js_uncheckedIndex :: Int# -> JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var i = $1, s = $2; if(i < 0 || i > s.length) return -1; var ch = s.charCodeAt(i); return ((ch|1023)===0xDFFF) ? (((s.charCodeAt(i-1)-0xD800)<<10)+ch-0xDC00+0x10000) : ch;"
+  js_uncheckedIndexR_wasm :: Int -> JSString -> Int
+js_uncheckedIndexR :: Int# -> JSString -> Int#
+js_uncheckedIndexR i x = case js_uncheckedIndexR_wasm (I# i) x of I# r -> r
+{-# INLINE js_uncheckedIndexR #-}
+#else
 foreign import javascript unsafe
   "h$jsstringIndexR" js_uncheckedIndexR :: Int# -> JSString -> Int#
+#endif
 
 -- js_head and js_last return -1 for empty string
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var cp = $1.codePointAt(0); return (cp === undefined) ? -1 : (cp|0);"
+  js_head_wasm :: JSString -> Int
+js_head :: JSString -> Int#
+js_head x = case js_head_wasm x of I# r -> r
+{-# INLINE js_head #-}
+#else
 foreign import javascript unsafe
   "h$jsstringHead" js_head :: JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var s = $1, l = s.length; if(l===0) return -1; var ch = s.charCodeAt(l-1); if((ch|1023)===0xDFFF) { return (l>1) ? (((s.charCodeAt(l-2)-0xD800)<<10)+ch-0xDC00+0x10000) : -1; } else return ch;"
+  js_last_wasm :: JSString -> Int
+js_last :: JSString -> Int#
+js_last x = case js_last_wasm x of I# r -> r
+{-# INLINE js_last #-}
+#else
 foreign import javascript unsafe
   "h$jsstringLast" js_last :: JSString -> Int#
+#endif
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var s = $1, l = s.length; if(l===0) return null; var ch = s.charCodeAt(l-1); var o = ((ch|1023)===0xDFFF)?2:1; return s.substr(0, l-o);"
+  js_init :: JSString -> JSVal -- null for empty string
+#else
 foreign import javascript unsafe
   "h$jsstringInit" js_init :: JSString -> JSVal -- null for empty string
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var s = $1, l = s.length; if(l===0) return null; var ch = s.codePointAt(0); if(ch === undefined) return null; return s.substr((ch>=0x10000)?2:1);"
+  js_tail :: JSString -> JSVal -- null for empty string
+#else
 foreign import javascript unsafe
   "h$jsstringTail" js_tail :: JSString -> JSVal -- null for empty string
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return Array.from($1).reverse().join('');"
+  js_reverse :: JSString -> JSString
+#else
 foreign import javascript unsafe
   "h$jsstringReverse" js_reverse :: JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var x = $1, xl = x.length; if(xl === 0) return []; var i = xl-1, si, ch, s = xl, r = []; var tch = x.charCodeAt(i--); if((tch|1023)===0xDFFF) tch = (((x.charCodeAt(i--)-0xD800)<<10)+tch-0xDC00+0x10000); while(i >= 0) { si = i; ch = x.charCodeAt(i--); if((ch|1023)===0xDFFF) { ch = (((x.charCodeAt(i--)-0xD800)<<10)+ch-0xDC00+0x10000); } if(ch != tch) { tch = ch; r.push(x.substr(si+1,s-si)); s = si; } } r.push(x.substr(0,s+1)); return r.reverse();"
+  js_group_wasm :: JSString -> JSVal
+js_group :: JSString -> Exts.Any {- [JSString] -}
+js_group x = unsafeCoerce (wArrToList (js_group_wasm x))
+{-# INLINE js_group #-}
+#else
 foreign import javascript unsafe
   "h$jsstringGroup"  js_group :: JSString -> Exts.Any {- [JSString] -}
+#endif
 --foreign import javascript unsafe
 --  "h$jsstringGroup1" js_group1
 --  :: Int# -> Bool -> JSString -> (# Int#, JSString #)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return $1.join('');"
+  js_concat_wasm :: JSVal -> JSString
+js_concat :: Exts.Any {- [JSString] -} -> JSString
+js_concat xs = js_concat_wasm (wListToArr (unsafeCoerce xs))
+{-# INLINE js_concat #-}
+#else
 foreign import javascript unsafe
    "h$jsstringConcat" js_concat :: Exts.Any {- [JSString] -} -> JSString
+#endif
 -- debug this below!
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var r = $3.replace($1, $2, 'g'); if(r.indexOf($1) !== -1) { r = $3.split($1).join($2); } return r;"
+  js_replace :: JSString -> JSString -> JSString -> JSString
+#else
 foreign import javascript unsafe
    "h$jsstringReplace" js_replace :: JSString -> JSString -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var pat = $1, src = $2, i = 0, n = 0, pl = pat.length, sl = src.length; while(i<sl) { i = src.indexOf(pat, i); if(i===-1) break; n++; i += pl; } return n;"
+  js_count_wasm :: JSString -> JSString -> Int
+js_count :: JSString -> JSString -> Int#
+js_count p s = case js_count_wasm p s of I# r -> r
+{-# INLINE js_count #-}
+#else
 foreign import javascript unsafe
   "h$jsstringCount" js_count :: JSString -> JSString -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var sp = function(a) { if(a<5760) return a===32||(a>=9&&a<=13)||a===160; return (a>=8192&&a<=8202)||a===5760||a===8239||a===8287||a===12288; }; var n = $1, x = $2, m = n, s = n, l = x.length; if(m >= l) return [-1,null]; do { if(m >= l) return [-1,null]; } while(sp(x.charCodeAt(m++))); s = m - 1; while(m < l) { if(sp(x.charCodeAt(m++))) { return [m, (m-s<=1) ? '' : x.substr(s,m-s-1)]; } } if(s < l) { return [m, (s === 0) ? x : x.substr(s)]; } return [-1,null];"
+  js_words1_wasm :: Int -> JSString -> JSVal
+js_words1 :: Int# -> JSString -> (# Int#, JSString #)
+js_words1 n x = wIntStr (js_words1_wasm (I# n) x)
+{-# INLINE js_words1 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringWords1" js_words1 :: Int# -> JSString -> (# Int#, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var sp = function(a) { if(a<5760) return a===32||(a>=9&&a<=13)||a===160; return (a>=8192&&a<=8202)||a===5760||a===8239||a===8287||a===12288; }; var x = $1, a = [], s = -1, m = 0, l = x.length; outer: while(m < l) { do { if(m >= l) { s = m; break outer; } } while(sp(x.charCodeAt(m++))); s = m - 1; while(m < l) { if(sp(x.charCodeAt(m++))) { a.push((m-s<=1) ? '' : x.substr(s,m-s-1)); s = m; break; } } } if(s !== -1 && s < l) { a.push((s === 0) ? x : x.substr(s)); } return a;"
+  js_words_wasm :: JSString -> JSVal
+js_words :: JSString -> Exts.Any -- [JSString]
+js_words x = unsafeCoerce (wArrToList (js_words_wasm x))
+{-# INLINE js_words #-}
+#else
 foreign import javascript unsafe
   "h$jsstringWords" js_words :: JSString -> Exts.Any -- [JSString]
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, x = $2, m = n, l = x.length; if(n >= l) return [-1,null]; while(m < l) { if(x.charCodeAt(m++) === 10) { if(n > 0 && n === l-1) return [-1,null]; return [m, (m-n<=1) ? '' : x.substr(n,m-n-1)]; } } return [m, x.substr(n)];"
+  js_lines1_wasm :: Int -> JSString -> JSVal
+js_lines1 :: Int# -> JSString -> (# Int#, JSString #)
+js_lines1 n x = wIntStr (js_lines1_wasm (I# n) x)
+{-# INLINE js_lines1 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringLines1" js_lines1 :: Int# -> JSString -> (# Int#, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var x = $1, a = [], m = 0, l = x.length, s = 0; if(l === 0) return a; outer: while(true) { s = m; do { if(m >= l) break outer; } while(x.charCodeAt(m++) !== 10); a.push((m-s<=1) ? '' : x.substr(s,m-s-1)); } if(s < l) { a.push(x.substr(s)); } return a;"
+  js_lines_wasm :: JSString -> JSVal
+js_lines :: JSString -> Exts.Any -- [JSString]
+js_lines x = unsafeCoerce (wArrToList (js_lines_wasm x))
+{-# INLINE js_lines #-}
+#else
 foreign import javascript unsafe
   "h$jsstringLines" js_lines :: JSString -> Exts.Any -- [JSString]
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var r = ''; for(var i = 0; i < $1.length; i++) r = r + $1[i] + String.fromCharCode(10); return r;"
+  js_unlines_wasm :: JSVal -> JSString
+js_unlines :: Exts.Any {- [JSString] -} -> JSString
+js_unlines xs = js_unlines_wasm (wListToArr (unsafeCoerce xs))
+{-# INLINE js_unlines #-}
+#else
 foreign import javascript unsafe
   "h$jsstringUnlines" js_unlines :: Exts.Any {- [JSString] -} -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return $1.join(' ');"
+  js_unwords_wasm :: JSVal -> JSString
+js_unwords :: Exts.Any {- [JSString] -} -> JSString
+js_unwords xs = js_unwords_wasm (wListToArr (unsafeCoerce xs))
+{-# INLINE js_unwords #-}
+#else
 foreign import javascript unsafe
   "h$jsstringUnwords" js_unwords :: Exts.Any {- [JSString] -} -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "$2.startsWith($1)"
+  js_isPrefixOf :: JSString -> JSString -> Bool
+#else
 foreign import javascript unsafe
   "h$jsstringIsPrefixOf" js_isPrefixOf :: JSString -> JSString -> Bool
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "$2.endsWith($1)"
+  js_isSuffixOf :: JSString -> JSString -> Bool
+#else
 foreign import javascript unsafe
   "h$jsstringIsSuffixOf" js_isSuffixOf :: JSString -> JSString -> Bool
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "$2.includes($1)"
+  js_isInfixOf :: JSString -> JSString -> Bool
+#else
 foreign import javascript unsafe
   "h$jsstringIsInfixOf" js_isInfixOf :: JSString -> JSString -> Bool
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return $2.startsWith($1) ? $2.substr($1.length) : null;"
+  js_stripPrefix_wasm :: JSString -> JSString -> JSVal
+js_stripPrefix :: JSString -> JSString -> Exts.Any -- Maybe JSString
+js_stripPrefix p x = unsafeCoerce (wMaybeStr (js_stripPrefix_wasm p x))
+{-# INLINE js_stripPrefix #-}
+#else
 foreign import javascript unsafe
   "h$jsstringStripPrefix" js_stripPrefix
   :: JSString -> JSString -> Exts.Any -- Maybe JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return $2.endsWith($1) ? $2.substr(0, $2.length-$1.length) : null;"
+  js_stripSuffix_wasm :: JSString -> JSString -> JSVal
+js_stripSuffix :: JSString -> JSString -> Exts.Any -- Maybe JSString
+js_stripSuffix s x = unsafeCoerce (wMaybeStr (js_stripSuffix_wasm s x))
+{-# INLINE js_stripSuffix #-}
+#else
 foreign import javascript unsafe
   "h$jsstringStripSuffix" js_stripSuffix
   :: JSString -> JSString -> Exts.Any -- Maybe JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var x = $1, y = $2, lx = x.length, ly = y.length, i = 0, cx; var l = (lx <= ly) ? lx : ly; if(lx === 0 || ly === 0 || x.charCodeAt(0) !== y.charCodeAt(0)) { return null; } while(++i<l) { cx = x.charCodeAt(i); if(cx !== y.charCodeAt(i)) { if((cx|1023)===0xDFFF) i--; break; } } if(i===0) return null; return [(i===lx) ? x : ((i===ly) ? y : x.substr(0,i)), (i===lx) ? '' : x.substr(i), (i===ly) ? '' : y.substr(i)];"
+  js_commonPrefixes_wasm :: JSString -> JSString -> JSVal
+js_commonPrefixes :: JSString -> JSString -> Exts.Any -- Maybe (JSString, JSString, JSString)
+js_commonPrefixes x y =
+  let r = js_commonPrefixes_wasm x y
+  in  unsafeCoerce (if js_isNull r then Nothing
+                    else Just ( JSString (js_wArrVal r 0)
+                              , JSString (js_wArrVal r 1)
+                              , JSString (js_wArrVal r 2)))
+{-# INLINE js_commonPrefixes #-}
+#else
 foreign import javascript unsafe
   "h$jsstringCommonPrefixes" js_commonPrefixes
   :: JSString -> JSString -> Exts.Any -- Maybe (JSString, JSString, JSString)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, x = $2, l = x.length; if(l===0 || n <= 0) return []; if(l <= n) return [x]; var a = [], s = 0, ch, m = 0, c; while(m < l) { s = m; c = 0; while(m < l && ++c <= n) { ch = x.charCodeAt(m++); if((ch|1023)===0xDBFF) ++m; } if(c) a.push(x.substr(s, m-s)); } return a;"
+  js_chunksOf_wasm :: Int -> JSString -> JSVal
+js_chunksOf :: Int# -> JSString -> Exts.Any -- [JSString]
+js_chunksOf n x = unsafeCoerce (wArrToList (js_chunksOf_wasm (I# n) x))
+{-# INLINE js_chunksOf #-}
+#else
 foreign import javascript unsafe
   "h$jsstringChunksOf" js_chunksOf
   :: Int# -> JSString -> Exts.Any -- [JSString]
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, s = $2, x = $3, m = s, c = 0, l = x.length, ch; if(n <= 0 || l === 0 || s >= l) return [-1,null]; while(++m < l) { ch = x.charCodeAt(m - 1); if((ch|1023)===0xDBFF) ++m; if(++c >= n) break; } return [m, (m >= l && s === c) ? x : x.substr(s,m-s)];"
+  js_chunksOf1_wasm :: Int -> Int -> JSString -> JSVal
+js_chunksOf1 :: Int# -> Int# -> JSString -> (# Int#, JSString #)
+js_chunksOf1 n s x = wIntStr (js_chunksOf1_wasm (I# n) (I# s) x)
+{-# INLINE js_chunksOf1 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringChunksOf1" js_chunksOf1
   :: Int# -> Int# -> JSString -> (# Int#, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, str = $2; if(n <= 0) { return ['', str]; } else if(n >= str.length) { return [str, '']; } var i = 0, l = str.length, ch; while(n--) { ch = str.charCodeAt(i++); if((ch|1023)===0xDBFF) i++; if(i >= l) { return [str, '']; } } return [str.substr(0,i), str.substr(i)];"
+  js_splitAt_wasm :: Int -> JSString -> JSVal
+js_splitAt :: Int# -> JSString -> (# JSString, JSString #)
+js_splitAt n x = wStrStr (js_splitAt_wasm (I# n) x)
+{-# INLINE js_splitAt #-}
+#else
 foreign import javascript unsafe
   "h$jsstringSplitAt" js_splitAt
   :: Int# -> JSString -> (# JSString, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return $2.split($1);"
+  js_splitOn_wasm :: JSString -> JSString -> JSVal
+js_splitOn :: JSString -> JSString -> Exts.Any -- [JSString]
+js_splitOn p x = unsafeCoerce (wArrToList (js_splitOn_wasm p x))
+{-# INLINE js_splitOn #-}
+#else
 foreign import javascript unsafe
   "h$jsstringSplitOn" js_splitOn
   :: JSString -> JSString -> Exts.Any -- [JSString]
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, p = $2, x = $3; var i = x.indexOf(p, n); if(i === -1) return [-1,null]; return [i + p.length, (i==n) ? '' : x.substr(n, i-n)];"
+  js_splitOn1_wasm :: Int -> JSString -> JSString -> JSVal
+js_splitOn1 :: Int# -> JSString -> JSString -> (# Int#, JSString #)
+js_splitOn1 n p x = wIntStr (js_splitOn1_wasm (I# n) p x)
+{-# INLINE js_splitOn1 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringSplitOn1" js_splitOn1
   :: Int# -> JSString -> JSString -> (# Int#, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var b = $1, x = $2; var i = x.indexOf(b); if(i===-1) return [x, '']; if(i===0) return ['', x]; return [x.substr(0,i), x.substr(i)];"
+  js_breakOn_wasm :: JSString -> JSString -> JSVal
+js_breakOn :: JSString -> JSString -> (# JSString, JSString #)
+js_breakOn b x = wStrStr (js_breakOn_wasm b x)
+{-# INLINE js_breakOn #-}
+#else
 foreign import javascript unsafe
   "h$jsstringBreakOn" js_breakOn
   :: JSString -> JSString -> (# JSString, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var b = $1, x = $2; var i = x.lastIndexOf(b); if(i===-1) return ['', x]; i += b.length; return [x.substr(0,i), x.substr(i)];"
+  js_breakOnEnd_wasm :: JSString -> JSString -> JSVal
+js_breakOnEnd :: JSString -> JSString -> (# JSString, JSString #)
+js_breakOnEnd b x = wStrStr (js_breakOnEnd_wasm b x)
+{-# INLINE js_breakOnEnd #-}
+#else
 foreign import javascript unsafe
   "h$jsstringBreakOnEnd" js_breakOnEnd
   :: JSString -> JSString -> (# JSString, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var pat = $1, src = $2, a = [], n = 0, pl = pat.length; while(true) { var x = src.indexOf(pat, n); if(x === -1) break; a.push([src.substr(0,x), src.substr(x)]); n = x + pl; } return a;"
+  js_breakOnAll_wasm :: JSString -> JSString -> JSVal
+js_breakOnAll :: JSString -> JSString -> Exts.Any -- [(JSString, JSString)]
+js_breakOnAll p s = unsafeCoerce (P.map pair (wArrToVals (js_breakOnAll_wasm p s)))
+  where pair v = (JSString (js_wArrVal v 0), JSString (js_wArrVal v 1))
+{-# INLINE js_breakOnAll #-}
+#else
 foreign import javascript unsafe
   "h$jsstringBreakOnAll" js_breakOnAll
   :: JSString -> JSString -> Exts.Any -- [(JSString, JSString)]
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, b = $2, x = $3; var i = x.indexOf(b, n); if(i===0) return [b.length, '', x]; if(i===-1) return [-1, null, null]; return [i+b.length, x.substr(0,i), x.substr(i)];"
+  js_breakOnAll1_wasm :: Int -> JSString -> JSString -> JSVal
+js_breakOnAll1 :: Int# -> JSString -> JSString -> (# Int#, JSString, JSString #)
+js_breakOnAll1 n b x =
+  let r = js_breakOnAll1_wasm (I# n) b x
+  in  case js_wArrInt r 0 of
+        I# i -> (# i, JSString (js_wArrVal r 1), JSString (js_wArrVal r 2) #)
+{-# INLINE js_breakOnAll1 #-}
+#else
 foreign import javascript unsafe
   "h$jsstringBreakOnAll1" js_breakOnAll1
   :: Int# -> JSString -> JSString -> (# Int#, JSString, JSString #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, str = $2; if(n <= 0) return str; var i = 0, l = str.length, ch; if(n >= l) return ''; while(n--) { ch = str.charCodeAt(i++); if((ch|1023)===0xDBFF) i++; if(i >= l) return ''; } return str.substr(i);"
+  js_drop_wasm :: Int -> JSString -> JSString
+js_drop :: Int# -> JSString -> JSString
+js_drop n x = js_drop_wasm (I# n) x
+{-# INLINE js_drop #-}
+#else
 foreign import javascript unsafe
   "h$jsstringDrop" js_drop :: Int# -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, str = $2; if(n <= 0) return str; var l = str.length, i = l-1, ch; if(n >= l) return ''; while(n-- && i >= 0) { ch = str.charCodeAt(i--); if((ch|1023)===0xDFFF) i--; } return (i<0) ? '' : str.substr(0,i+1);"
+  js_dropEnd :: Int -> JSString -> JSString
+#else
 foreign import javascript unsafe
   "h$jsstringDropEnd" js_dropEnd :: Int -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, str = $2; if(n <= 0) return ''; var i = 0, l = str.length, ch; if(n >= l) return str; while(n--) { ch = str.charCodeAt(i++); if((ch|1023)===0xDBFF) i++; if(i >= l) return str; } return str.substr(0,i);"
+  js_take_wasm :: Int -> JSString -> JSString
+js_take :: Int# -> JSString -> JSString
+js_take n x = js_take_wasm (I# n) x
+{-# INLINE js_take #-}
+#else
 foreign import javascript unsafe
   "h$jsstringTake" js_take :: Int# -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, str = $2; if(n <= 0) return ''; var l = str.length, i = l-1, ch; if(n >= l) return str; while(n-- && i >= 0) { ch = str.charCodeAt(i--); if((ch|1023)===0xDFFF) i--; } return (i<0) ? str : str.substr(i+1);"
+  js_takeEnd_wasm :: Int -> JSString -> JSString
+js_takeEnd :: Int# -> JSString -> JSString
+js_takeEnd n x = js_takeEnd_wasm (I# n) x
+{-# INLINE js_takeEnd #-}
+#else
 foreign import javascript unsafe
   "h$jsstringTakeEnd" js_takeEnd :: Int# -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var n = $1, str = $2; if(n === 0 || str == '') return ''; if(n === 1) return str; var r = ''; do { if(n&1) r+=str; str+=str; n >>= 1; } while(n > 1); return r+str;"
+  js_replicate_wasm :: Int -> JSString -> JSString
+js_replicate :: Int# -> JSString -> JSString
+js_replicate n x = js_replicate_wasm (I# n) x
+{-# INLINE js_replicate #-}
+#else
 foreign import javascript unsafe
   "h$jsstringReplicate" js_replicate :: Int# -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+js_replicateChar :: Int -> Char -> JSString
+js_replicateChar n c = js_replicate_wasm n (js_singleton c)
+{-# INLINE js_replicateChar #-}
+#else
 foreign import javascript unsafe
   "h$jsstringReplicateChar" js_replicateChar :: Int -> Char -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { var l = x.length; return l==1 || (l==2 && (x.charCodeAt(0)|1023) == 0xDFFF); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { var l = x.length; return l==1 || (l==2 && (x.charCodeAt(0)|1023) == 0xDFFF); })"
+#endif
   js_isSingleton :: JSString -> Bool
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "var ch = $1, ys = $2, i = 0, l = ys.length, j = 0, a = [], ych; while(j < l) { if(i) a[i++] = ch; ych = ys.charCodeAt(j++); a[i++] = ych; if((ych|1023)===0xDBFF) a[i++] = ys.charCodeAt(j++); } var r = ''; for(var k=0; k<a.length; k+=60000) r += String.fromCodePoint.apply(null, a.slice(k, k+60000)); return r;"
+  js_intersperse :: Char -> JSString -> JSString
+#else
 foreign import javascript unsafe
   "h$jsstringIntersperse"
   js_intersperse :: Char -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe
+  "return $2.join($1);"
+  js_intercalate_wasm :: JSString -> JSVal -> JSString
+js_intercalate :: JSString -> Exts.Any {- [JSString] -} -> JSString
+js_intercalate i xs = js_intercalate_wasm i (wListToArr (unsafeCoerce xs))
+{-# INLINE js_intercalate #-}
+#else
 foreign import javascript unsafe
   "h$jsstringIntercalate"
   js_intercalate :: JSString -> Exts.Any {- [JSString] -} -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.toUpperCase(); })($1)" js_toUpper :: JSString -> JSString
+#else
 foreign import javascript unsafe
   "((x) => { return x.toUpperCase(); })" js_toUpper :: JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.toLowerCase(); })($1)" js_toLower :: JSString -> JSString
+#else
 foreign import javascript unsafe
   "((x) => { return x.toLowerCase(); })" js_toLower :: JSString -> JSString
+#endif
+
+#if defined(wasm32_HOST_ARCH)
+-- -----------------------------------------------------------------------------
+-- wasm helpers: the JavaScript backend's jsbits build Haskell lists, Maybes
+-- and unboxed tuples directly in JavaScript.  On wasm the snippets above
+-- return JavaScript arrays (or null) and these helpers convert them.  The
+-- arrays are freshly created and never mutated, so reading them purely is
+-- safe.
+
+foreign import javascript unsafe "$1.length" js_wArrLen :: JSVal -> Int
+foreign import javascript unsafe "$1[$2]"    js_wArrVal :: JSVal -> Int -> JSVal
+foreign import javascript unsafe "$1[$2]"    js_wArrInt :: JSVal -> Int -> Int
+foreign import javascript unsafe "$1"        js_wCharVal :: Char -> JSVal
+
+-- | The elements of a JS array.
+wArrToVals :: JSVal -> [JSVal]
+wArrToVals a = go 0
+  where n = js_wArrLen a
+        go i | i >= n    = []
+             | otherwise = js_wArrVal a i : go (i + 1)
+
+-- | A JS array of strings as a list of 'JSString'.
+wArrToList :: JSVal -> [JSString]
+wArrToList a = P.map JSString (wArrToVals a)
+
+-- | A JS array of code points as a 'String' (no range check, like the
+--   JavaScript backend's @chr#@).
+wArrToChars :: JSVal -> String
+wArrToChars a = go 0
+  where n = js_wArrLen a
+        go i | i >= n    = []
+             | otherwise = case js_wArrInt a i of
+                             I# c -> C# (chr# c) : go (i + 1)
+
+-- | Build a JS array from a (fully evaluated) list of strings.
+wListToArr :: [JSString] -> JSVal
+wListToArr xs = unsafePerformIO (Prim.toJSArray (P.map getJSVal xs))
+{-# NOINLINE wListToArr #-}
+
+-- | Build a JS array of code points from a (fully evaluated) 'String'.
+wCharsToArr :: String -> JSVal
+wCharsToArr cs = unsafePerformIO (Prim.toJSArray (P.map js_wCharVal cs))
+{-# NOINLINE wCharsToArr #-}
+
+-- | @[n, s]@ as @(# n, s #)@.
+wIntStr :: JSVal -> (# Int#, JSString #)
+wIntStr r = case js_wArrInt r 0 of
+              I# n -> (# n, JSString (js_wArrVal r 1) #)
+{-# INLINE wIntStr #-}
+
+-- | @[s1, s2]@ as @(# s1, s2 #)@.
+wStrStr :: JSVal -> (# JSString, JSString #)
+wStrStr r = (# JSString (js_wArrVal r 0), JSString (js_wArrVal r 1) #)
+{-# INLINE wStrStr #-}
+
+-- | @null@ as 'Nothing', a string as 'Just'.
+wMaybeStr :: JSVal -> Maybe JSString
+wMaybeStr v | js_isNull v = Nothing
+            | otherwise   = Just (JSString v)
+#endif

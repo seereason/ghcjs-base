@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI, DataKinds, KindSignatures,
              PolyKinds, UnboxedTuples, GHCForeignImportPrim, DeriveDataTypeable,
              UnliftedFFITypes, MagicHash
@@ -14,6 +15,9 @@ import           GHC.Types
 import           GHC.IO
 import qualified GHC.Exts as Exts
 import           GHC.Exts (State#)
+#if defined(wasm32_HOST_ARCH)
+import           GHC.ST (ST(..))
+#endif
 
 import           GHCJS.Internal.Types
 import qualified GHC.JS.Prim as Prim
@@ -140,6 +144,25 @@ unsafeThaw (SomeJSArray x) = pure (SomeJSArray x)
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+-- The wasm JSFFI cannot marshal State#-threaded unboxed tuples, so the
+-- js_* names below are wrappers (with the JavaScript-backend types, so
+-- that JavaScript.Array.ST etc. are unchanged) around boxed IO imports.
+
+foreign import javascript unsafe "[]"
+  js_create_wasm :: IO (SomeJSArray m)
+js_create   :: State# s -> (# State# s, SomeJSArray m #)
+js_create s = case unsafeIOToST js_create_wasm of ST f -> f s
+
+foreign import javascript unsafe "$1.length"
+  js_length_wasm :: SomeJSArray m -> IO Int
+js_length     :: SomeJSArray m -> State# s -> (# State# s, Int #)
+js_length x s = case unsafeIOToST (js_length_wasm x) of ST f -> f s
+foreign import javascript unsafe "$2[$1]"
+  js_index_wasm :: Int -> SomeJSArray m -> IO JSVal
+js_index     :: Int -> SomeJSArray m -> State# s -> (# State# s, JSVal #)
+js_index n x s = case unsafeIOToST (js_index_wasm n x) of ST f -> f s
+#else
 foreign import javascript unsafe "((x) => { return []; })"
   js_create   :: State# s -> (# State# s, SomeJSArray m #)
 
@@ -147,12 +170,36 @@ foreign import javascript unsafe "((x) => { return x.length; })"
   js_length     :: SomeJSArray m -> State# s -> (# State# s, Int #)
 foreign import javascript unsafe "((x,y) => { return y[x]; })"
   js_index     :: Int -> SomeJSArray m -> State# s -> (# State# s, JSVal #)
+#endif
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y[x]; })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { return y[x]; })"
+#endif
   js_indexPure :: Int -> JSArray -> JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.length; })($1)"
+#else
 foreign import javascript unsafe "((x) => { return x.length; })"
+#endif
   js_lengthPure :: JSArray -> Int
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$3[$1] = $2;"
+  js_setIndex_wasm :: Int -> JSVal -> SomeJSArray m -> IO ()
+js_setIndex :: Int -> JSVal -> SomeJSArray m -> State# s -> (# State# s, () #)
+js_setIndex n e x s = case unsafeIOToST (js_setIndex_wasm n e x) of ST f -> f s
+
+foreign import javascript unsafe "$3.slice($1,$2)"
+  js_slice_wasm :: Int -> Int -> SomeJSArray m -> IO (SomeJSArray m1)
+js_slice     :: Int -> Int -> SomeJSArray m -> State# s -> (# State# s, SomeJSArray m1 #)
+js_slice b e x s = case unsafeIOToST (js_slice_wasm b e x) of ST f -> f s
+foreign import javascript unsafe "$2.slice($1)"
+  js_slice1_wasm :: Int -> SomeJSArray m -> IO (SomeJSArray m1)
+js_slice1    :: Int -> SomeJSArray m -> State# s -> (# State# s, SomeJSArray m1 #)
+js_slice1 b x s = case unsafeIOToST (js_slice1_wasm b x) of ST f -> f s
+#else
 foreign import javascript unsafe "((x,y,z) => { z[x] = y; })"
   js_setIndex :: Int -> JSVal -> SomeJSArray m -> State# s -> (# State# s, () #)
 
@@ -160,12 +207,69 @@ foreign import javascript unsafe "((x,y,z) => { return z.slice(x,y); })"
   js_slice     :: Int -> Int -> SomeJSArray m -> State# s -> (# State# s, SomeJSArray m1 #)
 foreign import javascript unsafe "((x,y) => { return y.slice(x); })"
   js_slice1    :: Int -> SomeJSArray m -> State# s -> (# State# s, SomeJSArray m1 #)
+#endif
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { return z.slice(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe "((x,y,z) => { return z.slice(x,y); })"
+#endif
   js_slicePure  :: Int -> Int -> JSArray -> JSArray
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y) => { return y.slice(x); })($1,$2)"
+#else
 foreign import javascript unsafe "((x,y) => { return y.slice(x); })"
+#endif
   js_slice1Pure :: Int -> JSArray -> JSArray
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$1.concat($2)"
+  js_append_wasm :: SomeJSArray m0 -> SomeJSArray m1 -> IO (SomeJSArray m2)
+js_append   :: SomeJSArray m0 -> SomeJSArray m1 -> State# s ->  (# State# s, SomeJSArray m2 #)
+js_append x y s = case unsafeIOToST (js_append_wasm x y) of ST f -> f s
+
+foreign import javascript unsafe "$2.push($1);"
+  js_push_wasm :: JSVal -> SomeJSArray m -> IO ()
+js_push     :: JSVal -> SomeJSArray m -> State# s -> (# State# s, () #)
+js_push e x s = case unsafeIOToST (js_push_wasm e x) of ST f -> f s
+foreign import javascript unsafe "$1.pop()"
+  js_pop_wasm :: SomeJSArray m -> IO JSVal
+js_pop      :: SomeJSArray m -> State# s -> (# State# s, JSVal #)
+js_pop x s = case unsafeIOToST (js_pop_wasm x) of ST f -> f s
+foreign import javascript unsafe "$2.unshift($1);"
+  js_unshift_wasm :: JSVal -> SomeJSArray m -> IO ()
+js_unshift  :: JSVal -> SomeJSArray m -> State# s -> (# State# s, () #)
+js_unshift e x s = case unsafeIOToST (js_unshift_wasm e x) of ST f -> f s
+foreign import javascript unsafe "$1.shift()"
+  js_shift_wasm :: SomeJSArray m -> IO JSVal
+js_shift    :: SomeJSArray m -> State# s -> (# State# s, JSVal #)
+js_shift x s = case unsafeIOToST (js_shift_wasm x) of ST f -> f s
+
+foreign import javascript unsafe "$1.reverse();"
+  js_reverse_wasm :: SomeJSArray m -> IO ()
+js_reverse  :: SomeJSArray m -> State# s -> (# State# s, () #)
+js_reverse x s = case unsafeIOToST (js_reverse_wasm x) of ST f -> f s
+
+-- h$toHsListJSVal / h$fromHsListJSVal build / consume a Haskell list in
+-- JavaScript, which is impossible on wasm.  Convert element by element
+-- with GHC.JS.Prim.fromJSArray / toJSArray instead; the 'Exts.Any'
+-- types are kept so that the unsafeCoerce-based callers are unchanged.
+js_fromJSArray :: SomeJSArray m -> State# s -> (# State# s, Exts.Any #)
+js_fromJSArray (SomeJSArray a) s =
+  case unsafeIOToST (Prim.fromJSArray a) of
+    ST f -> case f s of (# s', xs #) -> (# s', unsafeCoerce xs #)
+js_fromJSArrayPure :: JSArray -> Exts.Any -- [JSVal]
+js_fromJSArrayPure (SomeJSArray a) = unsafeCoerce (unsafePerformIO (Prim.fromJSArray a))
+{-# NOINLINE js_fromJSArrayPure #-}
+
+js_toJSArray :: Exts.Any -> State# s -> (# State# s, SomeJSArray m #)
+js_toJSArray xs s =
+  case unsafeIOToST (Prim.toJSArray (unsafeCoerce xs :: [JSVal])) of
+    ST f -> case f s of (# s', a #) -> (# s', SomeJSArray a #)
+js_toJSArrayPure :: Exts.Any -> JSArray
+js_toJSArrayPure xs = SomeJSArray (unsafePerformIO (Prim.toJSArray (unsafeCoerce xs :: [JSVal])))
+{-# NOINLINE js_toJSArrayPure #-}
+#else
 foreign import javascript unsafe "((x,y) => { return x.concat(y); })"
   js_append   :: SomeJSArray m0 -> SomeJSArray m1 -> State# s ->  (# State# s, SomeJSArray m2 #)
 
@@ -190,4 +294,5 @@ foreign import javascript unsafe "h$fromHsListJSVal"
   js_toJSArray :: Exts.Any -> State# s -> (# State# s, SomeJSArray m #)
 foreign import javascript unsafe "h$fromHsListJSVal"
   js_toJSArrayPure :: Exts.Any -> JSArray
+#endif
 

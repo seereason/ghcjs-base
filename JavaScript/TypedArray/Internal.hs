@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# LANGUAGE JavaScriptFFI #-}
@@ -20,6 +21,9 @@ import Data.Typeable
 import GHC.Types
 import GHC.Exts
 import GHC.ST
+#if defined(wasm32_HOST_ARCH)
+import GHC.IO (unsafeIOToST)
+#endif
 
 import GHC.Int
 import GHC.Word
@@ -351,30 +355,161 @@ unsafeSet offset src dest = IO (js_unsafeSet offset src dest)
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.length; })($1)" js_length :: SomeTypedArray e m -> Int
+#else
 foreign import javascript unsafe
   "((x) => { return x.length; })" js_length :: SomeTypedArray e m -> Int
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.byteLength; })($1)" js_byteLength :: SomeTypedArray e m -> Int
+#else
 foreign import javascript unsafe
   "((x) => { return x.byteLength; })" js_byteLength :: SomeTypedArray e m -> Int
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.byteOffset; })($1)" js_byteOffset :: SomeTypedArray e m -> Int
+#else
 foreign import javascript unsafe
   "((x) => { return x.byteOffset; })" js_byteOffset :: SomeTypedArray e m -> Int
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.buffer; })($1)" js_buffer :: SomeTypedArray e m -> SomeArrayBuffer m
+#else
 foreign import javascript unsafe
   "((x) => { return x.buffer; })" js_buffer :: SomeTypedArray e m -> SomeArrayBuffer m
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x,y,z) => { return z.subarray(x,y); })($1,$2,$3)"
+#else
 foreign import javascript unsafe
   "((x,y,z) => { return z.subarray(x,y); })"
+#endif
   js_subarray :: Int -> Int -> SomeTypedArray e m -> SomeTypedArray e m
+#if defined(wasm32_HOST_ARCH)
+-- wasm: the State#-threaded JavaScript-backend imports become boxed IO
+-- imports (all synchronous, so 'unsafe') plus wrappers keeping the
+-- original names and types.  NB: the argument order of z.set(x,y) is
+-- kept exactly as in the JavaScript-backend code.
+foreign import javascript unsafe "$3.set($1,$2);"
+  js_set_wasm :: Int -> SomeTypedArray e m -> SomeTypedArray e1 m1 -> IO ()
+js_set :: Int -> SomeTypedArray e m -> SomeTypedArray e1 m1 -> State# s ->  (# State# s, () #)
+js_set o x y s = case unsafeIOToST (js_set_wasm o x y) of ST f -> f s
+js_unsafeSet :: Int -> SomeTypedArray e m -> SomeTypedArray e1 m1 -> State# s -> (# State# s, () #)
+js_unsafeSet o x y s = case unsafeIOToST (js_set_wasm o x y) of ST f -> f s
+#else
 foreign import javascript safe
   "((x,y,z) => { z.set(x,y); })"
   js_set :: Int -> SomeTypedArray e m -> SomeTypedArray e1 m1 -> State# s ->  (# State# s, () #)
 foreign import javascript unsafe
   "((x,y,z) => { z.set(x,y); })"
   js_unsafeSet :: Int -> SomeTypedArray e m -> SomeTypedArray e1 m1 -> State# s -> (# State# s, () #)
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.BYTES_PER_ELEMENT; })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return x.BYTES_PER_ELEMENT; })"
+#endif
   js_elemSize :: SomeTypedArray e m -> Int
 
 -- -----------------------------------------------------------------------------
 -- index
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$2[$1]" js_indexI_wasm :: Int -> SomeTypedArray e m -> IO Int
+foreign import javascript unsafe "$2[$1]" js_indexW_wasm :: Int -> SomeTypedArray e m -> IO Word
+foreign import javascript unsafe "$2[$1]" js_indexD_wasm :: Int -> SomeTypedArray e m -> IO Double
+
+js_indexI :: Int -> SomeTypedArray e m -> State# s -> (# State# s, Int# #)
+js_indexI i a s = case unsafeIOToST (js_indexI_wasm i a) of
+  ST f -> case f s of (# s', I# v #) -> (# s', v #)
+js_indexW :: Int -> SomeTypedArray e m -> State# s -> (# State# s, Word# #)
+js_indexW i a s = case unsafeIOToST (js_indexW_wasm i a) of
+  ST f -> case f s of (# s', W# v #) -> (# s', v #)
+js_indexD :: Int -> SomeTypedArray e m -> State# s -> (# State# s, Double #)
+js_indexD i a s = case unsafeIOToST (js_indexD_wasm i a) of ST f -> f s
+
+js_unsafeIndexI :: Int -> SomeTypedArray e m -> State# s -> (# State# s, Int# #)
+js_unsafeIndexI = js_indexI
+js_unsafeIndexW :: Int -> SomeTypedArray e m -> State# s -> (# State# s, Word# #)
+js_unsafeIndexW = js_indexW
+js_unsafeIndexD :: Int -> SomeTypedArray e m -> State# s -> (# State# s, Double #)
+js_unsafeIndexD = js_indexD
+
+-- setIndex
+
+foreign import javascript unsafe "$3[$1] = $2;" js_setIndexI_wasm :: Int -> Int    -> SomeTypedArray e m -> IO ()
+foreign import javascript unsafe "$3[$1] = $2;" js_setIndexW_wasm :: Int -> Word   -> SomeTypedArray e m -> IO ()
+foreign import javascript unsafe "$3[$1] = $2;" js_setIndexD_wasm :: Int -> Double -> SomeTypedArray e m -> IO ()
+
+js_setIndexI :: Int -> Int# -> SomeTypedArray e m -> State# s -> (# State# s, () #)
+js_setIndexI i x a s = case unsafeIOToST (js_setIndexI_wasm i (I# x) a) of ST f -> f s
+js_setIndexW :: Int -> Word# -> SomeTypedArray e m -> State# s -> (# State# s, () #)
+js_setIndexW i x a s = case unsafeIOToST (js_setIndexW_wasm i (W# x) a) of ST f -> f s
+js_setIndexD :: Int -> Double -> SomeTypedArray e m -> State# s -> (# State# s, () #)
+js_setIndexD i x a s = case unsafeIOToST (js_setIndexD_wasm i x a) of ST f -> f s
+
+js_unsafeSetIndexI :: Int -> Int# -> SomeTypedArray e m -> State# s -> (# State# s, () #)
+js_unsafeSetIndexI = js_setIndexI
+js_unsafeSetIndexW :: Int -> Word# -> SomeTypedArray e m -> State# s -> (# State# s, () #)
+js_unsafeSetIndexW = js_setIndexW
+js_unsafeSetIndexD :: Int -> Double -> SomeTypedArray e m -> State# s -> (# State# s, () #)
+js_unsafeSetIndexD = js_setIndexD
+
+-- indexOf / lastIndexOf
+
+foreign import javascript unsafe "$3.indexOf($2,$1)" js_indexOfI_wasm :: Int -> Int    -> SomeTypedArray e m -> IO Int
+foreign import javascript unsafe "$3.indexOf($2,$1)" js_indexOfW_wasm :: Int -> Word   -> SomeTypedArray e m -> IO Int
+foreign import javascript unsafe "$3.indexOf($2,$1)" js_indexOfD_wasm :: Int -> Double -> SomeTypedArray e m -> IO Int
+foreign import javascript unsafe "$3.lastIndexOf($2,$1)" js_lastIndexOfI_wasm :: Int -> Int    -> SomeTypedArray e m -> IO Int
+foreign import javascript unsafe "$3.lastIndexOf($2,$1)" js_lastIndexOfW_wasm :: Int -> Word   -> SomeTypedArray e m -> IO Int
+foreign import javascript unsafe "$3.lastIndexOf($2,$1)" js_lastIndexOfD_wasm :: Int -> Double -> SomeTypedArray e m -> IO Int
+
+js_indexOfI :: Int -> Int#   -> SomeTypedArray e m -> State# s -> (# State# s, Int #)
+js_indexOfI i x a s = case unsafeIOToST (js_indexOfI_wasm i (I# x) a) of ST f -> f s
+js_indexOfW :: Int -> Word#  -> SomeTypedArray e m -> State# s -> (# State# s, Int #)
+js_indexOfW i x a s = case unsafeIOToST (js_indexOfW_wasm i (W# x) a) of ST f -> f s
+js_indexOfD :: Int -> Double -> SomeTypedArray e m -> State# s -> (# State# s, Int #)
+js_indexOfD i x a s = case unsafeIOToST (js_indexOfD_wasm i x a) of ST f -> f s
+js_lastIndexOfI :: Int -> Int# -> SomeTypedArray e m -> State# s -> (# State# s, Int #)
+js_lastIndexOfI i x a s = case unsafeIOToST (js_lastIndexOfI_wasm i (I# x) a) of ST f -> f s
+js_lastIndexOfW :: Int -> Word# -> SomeTypedArray e m -> State# s -> (# State# s, Int #)
+js_lastIndexOfW i x a s = case unsafeIOToST (js_lastIndexOfW_wasm i (W# x) a) of ST f -> f s
+js_lastIndexOfD :: Int -> Double -> SomeTypedArray e m -> State# s -> (# State# s, Int #)
+js_lastIndexOfD i x a s = case unsafeIOToST (js_lastIndexOfD_wasm i x a) of ST f -> f s
+
+-- create
+
+foreign import javascript unsafe "new Int8Array($1)"         js_createInt8Array_wasm         :: Int -> IO (SomeInt8Array m)
+foreign import javascript unsafe "new Int16Array($1)"        js_createInt16Array_wasm        :: Int -> IO (SomeInt16Array m)
+foreign import javascript unsafe "new Int32Array($1)"        js_createInt32Array_wasm        :: Int -> IO (SomeInt32Array m)
+foreign import javascript unsafe "new Uint8ClampedArray($1)" js_createUint8ClampedArray_wasm :: Int -> IO (SomeUint8ClampedArray m)
+foreign import javascript unsafe "new Uint8Array($1)"        js_createUint8Array_wasm        :: Int -> IO (SomeUint8Array m)
+foreign import javascript unsafe "new Uint16Array($1)"       js_createUint16Array_wasm       :: Int -> IO (SomeUint16Array m)
+foreign import javascript unsafe "new Uint32Array($1)"       js_createUint32Array_wasm       :: Int -> IO (SomeUint32Array m)
+foreign import javascript unsafe "new Float32Array($1)"      js_createFloat32Array_wasm      :: Int -> IO (SomeFloat32Array m)
+foreign import javascript unsafe "new Float64Array($1)"      js_createFloat64Array_wasm      :: Int -> IO (SomeFloat64Array m)
+
+js_createInt8Array         :: Int -> State# s -> (# State# s,  SomeInt8Array m #)
+js_createInt8Array n s = case unsafeIOToST (js_createInt8Array_wasm n) of ST f -> f s
+js_createInt16Array        :: Int -> State# s -> (# State# s,  SomeInt16Array m #)
+js_createInt16Array n s = case unsafeIOToST (js_createInt16Array_wasm n) of ST f -> f s
+js_createInt32Array        :: Int -> State# s -> (# State# s,  SomeInt32Array m #)
+js_createInt32Array n s = case unsafeIOToST (js_createInt32Array_wasm n) of ST f -> f s
+js_createUint8ClampedArray :: Int -> State# s -> (# State# s,  SomeUint8ClampedArray m #)
+js_createUint8ClampedArray n s = case unsafeIOToST (js_createUint8ClampedArray_wasm n) of ST f -> f s
+js_createUint8Array        :: Int -> State# s -> (# State# s,  SomeUint8Array m #)
+js_createUint8Array n s = case unsafeIOToST (js_createUint8Array_wasm n) of ST f -> f s
+js_createUint16Array       :: Int -> State# s -> (# State# s,  SomeUint16Array m #)
+js_createUint16Array n s = case unsafeIOToST (js_createUint16Array_wasm n) of ST f -> f s
+js_createUint32Array       :: Int -> State# s -> (# State# s,  SomeUint32Array m #)
+js_createUint32Array n s = case unsafeIOToST (js_createUint32Array_wasm n) of ST f -> f s
+js_createFloat32Array      :: Int -> State# s -> (# State# s,  SomeFloat32Array m #)
+js_createFloat32Array n s = case unsafeIOToST (js_createFloat32Array_wasm n) of ST f -> f s
+js_createFloat64Array      :: Int -> State# s -> (# State# s,  SomeFloat64Array m #)
+js_createFloat64Array n s = case unsafeIOToST (js_createFloat64Array_wasm n) of ST f -> f s
+#else
 foreign import javascript safe
   "((x,y) => { return y[x]; })" js_indexI
   :: Int -> SomeTypedArray e m -> State# s -> (# State# s, Int# #)
@@ -472,66 +607,139 @@ foreign import javascript unsafe
 foreign import javascript unsafe
   "((x) => { return new Float64Array(x); })"
   js_createFloat64Array      :: Int -> State# s -> (# State# s,  SomeFloat64Array m #)
+#endif
 
 -- ------------------------------------------------------------------------------
 -- from array
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Int8Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Int8Array.from(x); })"
+#endif
   js_int8ArrayFromArray         :: SomeJSArray m0 -> IO (SomeInt8Array m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Int16Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Int16Array.from(x); })"
+#endif
   js_int16ArrayFromArray        :: SomeJSArray m0 -> IO (SomeInt16Array m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Int32Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Int32Array.from(x); })"
+#endif
   js_int32ArrayFromArray        :: SomeJSArray m0 -> IO (SomeInt32Array m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Uint8ClampedArray.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Uint8ClampedArray.from(x); })"
+#endif
   js_uint8ClampedArrayFromArray :: SomeJSArray m0 -> IO (SomeUint8ClampedArray m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Uint8Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Uint8Array.from(x); })"
+#endif
   js_uint8ArrayFromArray        :: SomeJSArray m0 -> IO (SomeUint8Array m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Uint16Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Uint16Array.from(x); })"
+#endif
   js_uint16ArrayFromArray       :: SomeJSArray m0 -> IO (SomeUint16Array m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Uint32Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Uint32Array.from(x); })"
+#endif
   js_uint32ArrayFromArray       :: SomeJSArray m0 -> IO (SomeUint32Array m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Float32Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Float32Array.from(x); })"
+#endif
   js_float32ArrayFromArray      :: SomeJSArray m0 -> IO (SomeFloat32Array m1)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return Float64Array.from(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return Float64Array.from(x); })"
+#endif
   js_float64ArrayFromArray      :: SomeJSArray m0 -> IO (SomeFloat64Array m1)
 
 -- ------------------------------------------------------------------------------
 -- from ArrayBuffer
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Int8Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Int8Array(x); })"
+#endif
   js_int8ArrayFromJSVal         :: JSVal -> SomeInt8Array m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Int16Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Int16Array(x); })"
+#endif
   js_int16ArrayFromJSVal        :: JSVal -> SomeInt16Array m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Int32Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Int32Array(x); })"
+#endif
   js_int32ArrayFromJSVal        :: JSVal -> SomeInt32Array m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Uint8ClampedArray(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Uint8ClampedArray(x); })"
+#endif
   js_uint8ClampedArrayFromJSVal :: JSVal -> SomeUint8ClampedArray m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Uint8Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Uint8Array(x); })"
+#endif
   js_uint8ArrayFromJSVal        :: JSVal -> SomeUint8Array m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Uint16Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Uint16Array(x); })"
+#endif
   js_uint16ArrayFromJSVal       :: JSVal -> SomeUint16Array m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Uint32Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Uint32Array(x); })"
+#endif
   js_uint32ArrayFromJSVal       :: JSVal -> SomeUint32Array m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Float32Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Float32Array(x); })"
+#endif
   js_float32ArrayFromJSVal      :: JSVal -> SomeFloat32Array m
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return new Float64Array(x); })($1)"
+#else
 foreign import javascript unsafe
   "((x) => { return new Float64Array(x); })"
+#endif
   js_float64ArrayFromJSVal      :: JSVal -> SomeFloat64Array m
 

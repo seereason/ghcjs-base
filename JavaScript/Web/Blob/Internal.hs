@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE JavaScriptFFI #-}
 {-# LANGUAGE DataKinds #-}
@@ -10,6 +11,10 @@ module JavaScript.Web.Blob.Internal where
 import Data.Typeable
 
 import GHCJS.Types
+#if defined(wasm32_HOST_ARCH)
+-- the wasm JSFFI only unwraps newtypes whose constructors are in scope
+import Data.JSString.Internal.Type (JSString(..))
+#endif
 
 data BlobType = BlobTypeBlob
               | BlobTypeFile
@@ -42,14 +47,34 @@ close b = js_close b
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.size; })($1)" js_size :: SomeBlob a -> Int
+#else
 foreign import javascript unsafe "((x) => { return x.size; })" js_size :: SomeBlob a -> Int
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.type; })($1)" js_type :: SomeBlob a -> JSString
+#else
 foreign import javascript unsafe "((x) => { return x.type; })" js_type :: SomeBlob a -> JSString
+#endif
 
 -- fixme figure out if we need to support older browsers with obsolete slice
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4) => { return $4.slice($1,$2,$3); })($1,$2,$3,$4)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4) => { return $4.slice($1,$2,$3); })"
+#endif
   js_slice :: Int -> Int -> JSString -> SomeBlob a -> SomeBlob a
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.isClosed; })($1)"
+#else
 foreign import javascript unsafe "((x) => { return x.isClosed; })"
+#endif
   js_isClosed :: SomeBlob a -> IO Bool
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.close(); })($1)"
+#else
 foreign import javascript unsafe "((x) => { return x.close(); })"
+#endif
   js_close :: SomeBlob a -> IO ()

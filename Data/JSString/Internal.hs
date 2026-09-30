@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash, NegativeLiterals, BangPatterns,
              ForeignFunctionInterface, JavaScriptFFI, UnliftedFFITypes
   #-}
@@ -63,10 +64,18 @@ empty = js_empty
 
 foreign import javascript unsafe
   "$r='';" js_empty :: JSString
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$1+$2" js_append :: JSString -> JSString -> JSString
+#else
 foreign import javascript unsafe
   "$1+$2" js_append :: JSString -> JSString -> JSString
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$1===$2" js_eq :: JSString -> JSString -> Bool
+#else
 foreign import javascript unsafe
   "$1===$2" js_eq :: JSString -> JSString -> Bool
+#endif
 foreign import javascript unsafe
   "$1.localeCompare($2)" js_compare :: JSString -> JSString -> Exts.Int#
 foreign import javascript unsafe

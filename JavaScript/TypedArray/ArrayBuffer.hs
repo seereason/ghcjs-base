@@ -1,6 +1,12 @@
+{-# LANGUAGE CPP #-}
 module JavaScript.TypedArray.ArrayBuffer
     ( ArrayBuffer
     , MutableArrayBuffer
+#if defined(wasm32_HOST_ARCH)
+      -- On wasm a foreign import can only take an ArrayBuffer if the
+      -- SomeArrayBuffer constructor is in scope.
+    , SomeArrayBuffer(..)
+#endif
     , freeze, unsafeFreeze
     , thaw, unsafeThaw
     , byteLength

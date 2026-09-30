@@ -285,19 +285,47 @@ instance (ToJSVal a, ToJSVal b, ToJSVal c, ToJSVal d, ToJSVal e, ToJSVal f, ToJS
     toJSVal (a,b,c,d,e,f,g) = join $ arr7 <$> toJSVal a <*> toJSVal b <*> toJSVal c <*> toJSVal d <*> toJSVal e <*> toJSVal f <*> toJSVal g
     {-# INLINE toJSVal #-}
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1) => { return [$1]; })($1)"
+#else
 foreign import javascript unsafe "(($1) => { return [$1]; })"
+#endif
   arr1 :: JSVal -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2) => { return [$1,$2]; })($1,$2)"
+#else
 foreign import javascript unsafe "(($1,$2) => { return [$1,$2]; })"
+#endif
   arr2 :: JSVal -> JSVal -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3) => { return [$1,$2,$3]; })($1,$2,$3)"
+#else
 foreign import javascript unsafe "(($1,$2,$3) => { return [$1,$2,$3]; })"
+#endif
   arr3 :: JSVal -> JSVal -> JSVal -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4) => { return [$1,$2,$3,$4]; })($1,$2,$3,$4)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4) => { return [$1,$2,$3,$4]; })"
+#endif
   arr4 :: JSVal -> JSVal -> JSVal -> JSVal -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { return [$1,$2,$3,$4,$5]; })($1,$2,$3,$4,$5)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5) => { return [$1,$2,$3,$4,$5]; })"
+#endif
   arr5 :: JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6) => { return [$1,$2,$3,$4,$5,$6]; })($1,$2,$3,$4,$5,$6)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6) => { return [$1,$2,$3,$4,$5,$6]; })"
+#endif
   arr6 :: JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> IO JSVal
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { return [$1,$2,$3,$4,$5,$6,$7]; })($1,$2,$3,$4,$5,$6,$7)"
+#else
 foreign import javascript unsafe "(($1,$2,$3,$4,$5,$6,$7) => { return [$1,$2,$3,$4,$5,$6,$7]; })"
+#endif
   arr7 :: JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> IO JSVal
 
 toJSVal_aeson :: AE.ToJSON a => a -> IO JSVal

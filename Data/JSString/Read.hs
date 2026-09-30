@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI, UnliftedFFITypes,
              GHCForeignImportPrim, UnboxedTuples, BangPatterns,
              MagicHash
@@ -25,6 +26,11 @@ import GHC.Word (Word64(..))
 import Unsafe.Coerce
 import Data.Maybe
 import Data.JSString
+#if defined(wasm32_HOST_ARCH)
+import GHC.Exts (intToInt64#, wordToWord64#)
+import qualified GHC.JS.Prim as Prim
+import Data.JSString.Internal.Type (JSString(..))
+#endif
 
 {- |
     Returns whether the JSString represents an integer at base 10
@@ -136,6 +142,30 @@ readIntegerMaybe j = convertNullMaybe js_readInteger j
 
 -- ----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+-- On wasm a JavaScript number is not a Haskell heap object, so the
+-- non-null result is converted explicitly for each result type.
+class ReadResult a where
+  fromReadResult :: JSVal -> a
+
+instance ReadResult Int where
+  fromReadResult = js_jsvalToInt
+
+instance ReadResult Double where
+  fromReadResult = js_jsvalToDouble
+
+-- js_readInteger returns the (validated) string itself on wasm
+instance ReadResult Integer where
+  fromReadResult r = read (Prim.fromJSString r)
+
+convertNullMaybe :: ReadResult a => (JSString -> JSVal) -> JSString -> Maybe a
+convertNullMaybe f j
+  | js_isNull r = Nothing
+  | otherwise   = Just (fromReadResult r)
+  where
+    r = f j
+{-# INLINE convertNullMaybe #-}
+#else
 convertNullMaybe :: (JSString -> JSVal) -> JSString -> Maybe a
 convertNullMaybe f j
   | js_isNull r = Nothing
@@ -143,14 +173,62 @@ convertNullMaybe f j
   where
     r = f j
 {-# INLINE convertNullMaybe #-}
+#endif
 
 readError :: String -> a
 readError xs = error ("Data.JSString.Read." ++ xs)
 
 -- ----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x===null; })($1)" js_isNull :: JSVal -> Bool
+#else
 foreign import javascript unsafe
   "((x) => { return x===null; })" js_isNull :: JSVal -> Bool
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$1|0" js_jsvalToInt :: JSVal -> Int
+foreign import javascript unsafe "$1" js_jsvalToDouble :: JSVal -> Double
+-- returns the string itself (or null), see the ReadResult Integer instance
+foreign import javascript unsafe
+  "/^(-)?\\d+$/.test($1) ? $1 : null" js_readInteger :: JSString -> JSVal
+foreign import javascript unsafe
+  "if(!/^-?\\d+/.test($1)) return null; var x = parseInt($1, 10); var x0 = x|0; return (x===x0) ? x0 : null;"
+  js_readInt :: JSString -> JSVal
+foreign import javascript unsafe
+  "var x = parseInt($1, 10); var x0 = x|0; return (x===x0) ? x0 : null;"
+  js_lenientReadInt :: JSString -> JSVal
+-- the 64 bit values are BigInts (null if the string is not a number),
+-- wrapped to 64 bits like the JavaScript backend's goog.math.Long code
+foreign import javascript unsafe
+  "/^(-)?\\d+$/.test($1) ? BigInt.asIntN(64, BigInt($1)) : null"
+  js_readInt64_wasm :: JSString -> JSVal
+foreign import javascript unsafe
+  "/^\\d+$/.test($1) ? BigInt.asUintN(64, BigInt($1)) : null"
+  js_readWord64_wasm :: JSString -> JSVal
+foreign import javascript unsafe "$1" js_jsvalToInt64  :: JSVal -> Int64
+foreign import javascript unsafe "$1" js_jsvalToWord64 :: JSVal -> Word64
+js_readInt64 :: JSString -> (# Int#, Int64# #)
+js_readInt64 j =
+  let r = js_readInt64_wasm j
+  in  if js_isNull r
+        then (# 0#, intToInt64# 0# #)
+        else case js_jsvalToInt64 r of I64# x -> (# 1#, x #)
+{-# INLINE js_readInt64 #-}
+js_readWord64 :: JSString -> (# Int#, Word64# #)
+js_readWord64 j =
+  let r = js_readWord64_wasm j
+  in  if js_isNull r
+        then (# 0#, wordToWord64# 0## #)
+        else case js_jsvalToWord64 r of W64# x -> (# 1#, x #)
+{-# INLINE js_readWord64 #-}
+foreign import javascript unsafe
+  "parseFloat($1, 10)" js_readDouble :: JSString -> JSVal
+foreign import javascript unsafe
+  "/^-?\\d+$/.test($1)" js_isInteger :: JSString -> Bool
+foreign import javascript unsafe
+  "/^\\d+$/.test($1)" js_isNatural :: JSString -> Bool
+#else
 foreign import javascript unsafe
   "((x) => { return x; })" js_toHeapObject :: JSVal -> Any
 foreign import javascript unsafe
@@ -169,3 +247,4 @@ foreign import javascript unsafe
   "h$jsstringIsInteger" js_isInteger :: JSString -> Bool
 foreign import javascript unsafe
   "h$jsstringIsNatural" js_isNatural :: JSString -> Bool
+#endif

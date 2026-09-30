@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI #-}
 
 module JavaScript.Web.Canvas.TextMetrics ( width
@@ -66,29 +67,77 @@ ideographicBaseline tm = js_ideographicBaseline tm
 
 -- -----------------------------------------------------------------------------
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.width; })($1)" js_width :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.width; })" js_width :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.actualBoundingBoxLeft; })($1)" js_actualBoundingBoxLeft :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.actualBoundingBoxLeft; })" js_actualBoundingBoxLeft :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.actualBoundingBoxRight; })($1)" js_actualBoundingBoxRight :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.actualBoundingBoxRight; })" js_actualBoundingBoxRight :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.fontBoundingBoxAscent; })($1)" js_fontBoundingBoxAscent :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.fontBoundingBoxAscent; })" js_fontBoundingBoxAscent :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.fontBoundingBoxDescent; })($1)" js_fontBoundingBoxDescent :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.fontBoundingBoxDescent; })" js_fontBoundingBoxDescent :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.actualBoundingBoxAscent; })($1)" js_actualBoundingBoxAscent :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.actualBoundingBoxAscent; })" js_actualBoundingBoxAscent :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.actualBoundingBoxDescent; })($1)" js_actualBoundingBoxDescent :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.actualBoundingBoxDescent; })" js_actualBoundingBoxDescent :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.emHeightAscent; })($1)" js_emHeightAscent :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.emHeightAscent; })" js_emHeightAscent :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.emHeightDescent; })($1)" js_emHeightDescent :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.emHeightDescent; })" js_emHeightDescent :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.hangingBaseline; })($1)" js_hangingBaseline :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.hangingBaseline; })" js_hangingBaseline :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.alphabeticBaseline; })($1)" js_alphabeticBaseline :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.alphabeticBaseline; })" js_alphabeticBaseline :: TextMetrics -> Double
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x.ideographicBaseline; })($1)" js_ideographicBaseline :: TextMetrics -> Double
+#else
 foreign import javascript unsafe
   "((x) => { return x.ideographicBaseline; })" js_ideographicBaseline :: TextMetrics -> Double
+#endif
 
 

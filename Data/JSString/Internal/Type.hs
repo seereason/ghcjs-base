@@ -46,8 +46,12 @@ instance IsJSVal JSString
 
 instance NFData JSString where rnf !x = ()
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "(() => { return ''; })()" js_empty :: JSString
+#else
 foreign import javascript unsafe
   "(() => { return ''; })" js_empty :: JSString
+#endif
 
 -- | /O(1)/ The empty 'JSString'.
 empty :: JSString

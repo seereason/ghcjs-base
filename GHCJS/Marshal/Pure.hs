@@ -138,21 +138,131 @@ instance PToJSVal a => PToJSVal (Maybe a) where
     pToJSVal (Just a) = pToJSVal a
     {-# INLINE pToJSVal #-}
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x>>>0; })($1)"
+  jsvalToWord_wasm :: JSVal -> Word
+jsvalToWord :: JSVal -> Word#
+jsvalToWord a1 = case jsvalToWord_wasm a1 of W# r -> r
+{-# INLINE jsvalToWord #-}
+#else
 foreign import javascript unsafe "((x) => { return x>>>0; })"        jsvalToWord   :: JSVal -> Word#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$1&0xff"   jsvalToWord8_wasm  :: JSVal -> Word8
+foreign import javascript unsafe "$1&0xffff" jsvalToWord16_wasm :: JSVal -> Word16
+jsvalToWord8 :: JSVal -> Word8#
+jsvalToWord8 a1 = case jsvalToWord8_wasm a1 of W8# r -> r
+{-# INLINE jsvalToWord8 #-}
+jsvalToWord16 :: JSVal -> Word16#
+jsvalToWord16 a1 = case jsvalToWord16_wasm a1 of W16# r -> r
+{-# INLINE jsvalToWord16 #-}
+#else
 foreign import javascript unsafe "((x) => { return x&0xff; })"       jsvalToWord8  :: JSVal -> Word8#
 foreign import javascript unsafe "((x) => { return x&0xffff; })"     jsvalToWord16 :: JSVal -> Word16#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x>>>0; })($1)"        jsvalToWord32 :: JSVal -> Word32
+#else
 foreign import javascript unsafe "((x) => { return x>>>0; })"        jsvalToWord32 :: JSVal -> Word32
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x|0; })($1)"
+  jsvalToInt_wasm :: JSVal -> Int
+jsvalToInt :: JSVal -> Int#
+jsvalToInt a1 = case jsvalToInt_wasm a1 of I# r -> r
+{-# INLINE jsvalToInt #-}
+#else
 foreign import javascript unsafe "((x) => { return x|0; })"          jsvalToInt    :: JSVal -> Int#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$1<<24>>24" jsvalToInt8_wasm  :: JSVal -> Int8
+foreign import javascript unsafe "$1<<16>>16" jsvalToInt16_wasm :: JSVal -> Int16
+foreign import javascript unsafe "$1|0"       jsvalToInt32_wasm :: JSVal -> Int32
+jsvalToInt8 :: JSVal -> Int8#
+jsvalToInt8 a1 = case jsvalToInt8_wasm a1 of I8# r -> r
+{-# INLINE jsvalToInt8 #-}
+jsvalToInt16 :: JSVal -> Int16#
+jsvalToInt16 a1 = case jsvalToInt16_wasm a1 of I16# r -> r
+{-# INLINE jsvalToInt16 #-}
+jsvalToInt32 :: JSVal -> Int32#
+jsvalToInt32 a1 = case jsvalToInt32_wasm a1 of I32# r -> r
+{-# INLINE jsvalToInt32 #-}
+#else
 foreign import javascript unsafe "((x) => { return x<<24>>24; })"    jsvalToInt8   :: JSVal -> Int8#
 foreign import javascript unsafe "((x) => { return x<<16>>16; })"    jsvalToInt16  :: JSVal -> Int16#
 foreign import javascript unsafe "((x) => { return x|0; })"          jsvalToInt32  :: JSVal -> Int32#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return +x; })($1)"
+  jsvalToFloat_wasm :: JSVal -> Float
+jsvalToFloat :: JSVal -> Float#
+jsvalToFloat a1 = case jsvalToFloat_wasm a1 of F# r -> r
+{-# INLINE jsvalToFloat #-}
+#else
 foreign import javascript unsafe "((x) => { return +x; })"           jsvalToFloat  :: JSVal -> Float#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return +x; })($1)"
+  jsvalToDouble_wasm :: JSVal -> Double
+jsvalToDouble :: JSVal -> Double#
+jsvalToDouble a1 = case jsvalToDouble_wasm a1 of D# r -> r
+{-# INLINE jsvalToDouble #-}
+#else
 foreign import javascript unsafe "((x) => { return +x; })"           jsvalToDouble :: JSVal -> Double#
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x&0x7fffffff; })($1)"
+  jsvalToChar_wasm :: JSVal -> Char
+jsvalToChar :: JSVal -> Char#
+jsvalToChar a1 = case jsvalToChar_wasm a1 of C# r -> r
+{-# INLINE jsvalToChar #-}
+#else
 foreign import javascript unsafe "((x) => { return x&0x7fffffff; })" jsvalToChar   :: JSVal -> Char#
+#endif
 
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x; })($1)"
+  wordToJSVal_wasm :: Word -> JSVal
+wordToJSVal :: Word#   -> JSVal
+wordToJSVal a1 = wordToJSVal_wasm (W# a1)
+{-# INLINE wordToJSVal #-}
+#else
 foreign import javascript unsafe "((x) => { return x; })" wordToJSVal   :: Word#   -> JSVal
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x; })($1)"
+  intToJSVal_wasm :: Int -> JSVal
+intToJSVal :: Int#    -> JSVal
+intToJSVal a1 = intToJSVal_wasm (I# a1)
+{-# INLINE intToJSVal #-}
+#else
 foreign import javascript unsafe "((x) => { return x; })" intToJSVal    :: Int#    -> JSVal
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x; })($1)"
+  doubleToJSVal_wasm :: Double -> JSVal
+doubleToJSVal :: Double# -> JSVal
+doubleToJSVal a1 = doubleToJSVal_wasm (D# a1)
+{-# INLINE doubleToJSVal #-}
+#else
 foreign import javascript unsafe "((x) => { return x; })" doubleToJSVal :: Double# -> JSVal
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x; })($1)"
+  floatToJSVal_wasm :: Float -> JSVal
+floatToJSVal :: Float#  -> JSVal
+floatToJSVal a1 = floatToJSVal_wasm (F# a1)
+{-# INLINE floatToJSVal #-}
+#else
 foreign import javascript unsafe "((x) => { return x; })" floatToJSVal  :: Float#  -> JSVal
+#endif
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "((x) => { return x; })($1)"
+  charToJSVal_wasm :: Char -> JSVal
+charToJSVal :: Char#   -> JSVal
+charToJSVal a1 = charToJSVal_wasm (C# a1)
+{-# INLINE charToJSVal #-}
+#else
 foreign import javascript unsafe "((x) => { return x; })" charToJSVal   :: Char#   -> JSVal
+#endif
 

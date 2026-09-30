@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnboxedTuples #-}
 
 module JavaScript.Object ( Object
@@ -63,15 +64,35 @@ isInstanceOf (Object o) s = I.isInstanceOf o s
 
 -- -----------------------------------------------------------------------------
 {-
-foreign import javascript safe   "$2[$1]"
-  js_getProp       :: JSString -> JSVal a -> IO (JSVal b)
+#if defined(wasm32_HOST_ARCH)
 foreign import javascript unsafe "$2[$1]"
+#else
+foreign import javascript safe   "$2[$1]"
+#endif
+  js_getProp       :: JSString -> JSVal a -> IO (JSVal b)
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$2[$1]"
+#else
+foreign import javascript unsafe "$2[$1]"
+#endif
   js_unsafeGetProp :: JSString -> JSVal a -> IO (JSVal b)
-foreign import javascript safe   "$3[$1] = $2"
-  js_setProp       :: JSString -> JSVal a -> JSVal b -> IO ()
+#if defined(wasm32_HOST_ARCH)
 foreign import javascript unsafe "$3[$1] = $2"
+#else
+foreign import javascript safe   "$3[$1] = $2"
+#endif
+  js_setProp       :: JSString -> JSVal a -> JSVal b -> IO ()
+#if defined(wasm32_HOST_ARCH)
+foreign import javascript unsafe "$3[$1] = $2"
+#else
+foreign import javascript unsafe "$3[$1] = $2"
+#endif
   js_unsafeSetProp :: JSString -> JSVal a -> JSVal b -> IO ()
+#if defined(wasm32_HOST_ARCH)
 foreign import javascript unsafe "$1 instanceof $2"
+#else
+foreign import javascript unsafe "$1 instanceof $2"
+#endif
   js_isInstanceOf  :: Object -> JSVal a -> Bool
 foreign import javascript unsafe  "h$allProps"
   js_allProps      :: Object -> IO (JSArray JSString)
